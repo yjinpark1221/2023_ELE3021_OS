@@ -36,3 +36,5 @@
 #define IRQ_ERROR       19
 #define IRQ_SPURIOUS    31
 
+// lab4 practice
+#define T_MYINTERRUPT  128
