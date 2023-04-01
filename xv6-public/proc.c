@@ -15,6 +15,12 @@ struct {
   struct proc proc[NPROC];
 } ptable;
 
+struct {
+  struct proc* l0[NPROC];
+  struct proc* l1[NPROC];
+  struct proc* l2[NPROC];
+} pqueue;
+
 static struct proc *initproc;
 
 int nextpid = 1;
