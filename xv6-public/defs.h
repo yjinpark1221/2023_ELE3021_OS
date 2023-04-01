@@ -189,5 +189,13 @@ void            clearpteu(pde_t *pgdir, char *uva);
 
 // prac_syscall.c
 int             myfunction(char*);
+
+// project1 scheduler
+// schedsyscall.c
+int             getLevel(void);
+void            setPriority(int, int);
+void            schedulerLock(int);
+void            schedulerUnlock(int);
+
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

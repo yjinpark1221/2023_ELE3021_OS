@@ -7,9 +7,6 @@
 #include "proc.h"
 #include "spinlock.h"
 
-// project1 scheduler
-const int MY_ID = 2020002960;
-
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
@@ -533,75 +530,5 @@ procdump(void)
         cprintf(" %p", pc[i]);
     }
     cprintf("\n");
-  }
-}
-
-// project1 scheduler
-
-// Wrapper for system calls
-int sys_yield(void)
-{
-  yield();
-  return 0;
-}
-
-int sys_getLevel(void)
-{
-  return getLevel();
-}
-
-int sys_setPriority(void)
-{
-  int arguments[2];
-  if (argint(2, arguments) < 0)
-    return -1;
-  if (arguments[0] < 0 || arguments[1] < 0)
-    return -1;
-  setPriority(arguments[0], arguments[1]);
-  return 0;
-}
-
-int sys_schedulerLock(void)
-{
-  int password;
-  if (argint(1, &password) < 0)
-    return -1;
-  schedulerLock(password);
-  return 0;
-}
-
-int sys_schedulerUnlock(void)
-{
-  int password;
-  if (argint(1, &password) < 0)
-    return -1;
-  schedulerUnlock(password);
-  return 0;
-}
-
-int getLevel()
-{
-  return myproc()->queueLevel;
-}
-
-void setPriority(int pid, int priority)
-{
-  ptable.proc[pid].priority = priority;
-}
-
-// TODO : schedulerLock, schedulerUnlock implementation
-void schedulerLock(int password)
-{
-  if (password == MY_ID)
-  {
-    
-  }
-}
-
-void schedulerUnlock(int password)
-{
-  if (password == MY_ID)
-  {
-
   }
 }

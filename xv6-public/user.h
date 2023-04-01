@@ -23,7 +23,14 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+// lab4 system call practice
 int myfunction(char*);
+// project1 scheduler
+void yield(void);
+int getLevel(void);
+void setPriority(int, int);
+void schedulerLock(int);
+void schedulerUnlock(int);
 
 // ulib.c
 int stat(const char*, struct stat*);
