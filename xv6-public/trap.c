@@ -53,6 +53,15 @@ trap(struct trapframe *tf)
     cprintf("user interrupt %d called!\n", tf->trapno);
     exit();
     break;
+
+  // project1 scheduler
+  case T_SCHEDLOCK:
+    schedulerLock(PASSWORD);
+    break;
+  case T_SCHEDUNLOCK:
+    schedulerUnlock(PASSWORD);
+    break;
+
   case T_IRQ0 + IRQ_TIMER:
     if(cpuid() == 0){
       acquire(&tickslock);
@@ -106,11 +115,16 @@ trap(struct trapframe *tf)
   if(myproc() && myproc()->killed && (tf->cs&3) == DPL_USER)
     exit();
 
-  // Force process to give up CPU on clock tick.
-  // If interrupts were on while locks held, would need to check nlock.
+  // // Force process to give up CPU on clock tick.
+  // // If interrupts were on while locks held, would need to check nlock.
+  // if(myproc() && myproc()->state == RUNNING &&
+  //    tf->trapno == T_IRQ0+IRQ_TIMER)
+  //   yield();
+
+  // project1 scheduler
   if(myproc() && myproc()->state == RUNNING &&
-     tf->trapno == T_IRQ0+IRQ_TIMER)
-    yield();
+     tf->trapno == T_IRQ0+IRQ_TIMER && ticks == 100)
+    boostPriority();
 
   // Check if the process has been killed since we yielded
   if(myproc() && myproc()->killed && (tf->cs&3) == DPL_USER)

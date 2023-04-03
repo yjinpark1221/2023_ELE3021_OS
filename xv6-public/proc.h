@@ -50,8 +50,12 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
   // project1 scheduler
-  int queueLevel;
-  int priority;
+  int level;                    // queue level
+  int priority;                 // for scheduler
+  struct proc* prev;            // for queue
+  struct proc* next;            // for queue
+  int tq;                       // time quantum
+  struct queue* queue;          // queue
 };
 
 // Process memory is laid out contiguously, low addresses first:
@@ -59,3 +63,15 @@ struct proc {
 //   original data and bss
 //   fixed-size stack
 //   expandable heap
+
+// project1 scheduler
+#include <stddef.h>
+#include <stdbool.h>
+
+struct queue
+{
+  struct proc *front;
+  struct proc *back;
+  int level;
+  int size;
+};

@@ -7,19 +7,12 @@
 #include "proc.h"
 #include "spinlock.h"
 
-// project1 scheduler
-const int MY_ID = 2020002960;
-
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
+  struct queue queue[NQUEUE];
+  int lockpid;
 } ptable;
-
-struct {
-  struct proc* l0[NPROC];
-  struct proc* l1[NPROC];
-  struct proc* l2[NPROC];
-} pqueue;
 
 static struct proc *initproc;
 
@@ -97,6 +90,12 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+
+  p->level = 0;
+  p->priority = 0;
+  p->queue = ptable.queue;
+  p->next = p->prev = NULL;
+  pushqueue(p->queue, p);
 
   release(&ptable.lock);
 
@@ -295,6 +294,7 @@ wait(void)
       havekids = 1;
       if(p->state == ZOMBIE){
         // Found one.
+        erasequeue(p->queue, p);
         pid = p->pid;
         kfree(p->kstack);
         p->kstack = 0;
@@ -320,6 +320,7 @@ wait(void)
   }
 }
 
+// project1 scheduler
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -334,31 +335,41 @@ scheduler(void)
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
-  
   for(;;){
     // Enable interrupts on this processor.
     sti();
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
-        continue;
-
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
-
-      swtch(&(c->scheduler), p->context);
-      switchkvm();
-
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      c->proc = 0;
+    for (; ;) {
+      p = getProcessToRun();
+      if (p == NULL) {
+        break;
+      }
+      if (p->tq == getTimeQuantum(p->level)) {
+        expireTimeQuantum(p);
+      }
+      else break;
     }
+    if (p == NULL) {
+      release(&ptable.lock);
+      continue;
+    }
+    ++p->tq;
+    
+    // Switch to chosen process.  It is the process's job
+    // to release ptable.lock and then reacquire it
+    // before jumping back to us.
+    c->proc = p;
+    switchuvm(p);
+    p->state = RUNNING;
+    // cprintf("running [\t%d\t] %s\n", p->pid, p->name);
+    swtch(&(c->scheduler), p->context);
+    switchkvm();
+
+    // Process is done running for now.
+    // It should have changed its p->state before coming back.
+    c->proc = 0;
     release(&ptable.lock);
 
   }
@@ -417,7 +428,6 @@ forkret(void)
     iinit(ROOTDEV);
     initlog(ROOTDEV);
   }
-
   // Return to "caller", actually trapret (see allocproc).
 }
 
@@ -544,29 +554,163 @@ procdump(void)
 
 // project1 scheduler
 
+int getTimeQuantum(int i) 
+{
+  return 2 * i + 4;
+}
+
+// when called, ptable lock must be acquired
+struct proc* getProc(int pid)
+{
+  struct proc* p;
+  for (p = ptable.proc; p < &ptable.proc[NPROC]; ++p) {
+    if (p->pid == pid && p->state != UNUSED) {
+      return p;
+    }
+  }
+  return NULL;
+}
+
+// when called, ptable lock must be acquired
+void clearProc(struct proc* p) {
+  if (p == NULL || p->state == UNUSED) return;
+  p->priority = 3;
+  p->tq = 0;
+  p->level = 0;
+  erasequeue(p->queue, p);
+  p->queue = ptable.queue;
+  pushqueue(p->queue, p);
+}
+
+void boostPriority() {
+  acquire(&ptable.lock);
+
+  if (ptable.lockpid) schedulerUnlock(PASSWORD);
+  ticks = 0;
+  for (int i = 0; i < NPROC; ++i) {
+    for (struct proc* p = ptable.proc; p < &ptable.proc[NPROC]; ++p) {
+      if (p->state != UNUSED) {
+        clearProc(p);
+      }
+    }
+  }
+  release(&ptable.lock);
+}
+
 int getLevel()
 {
-  return myproc()->queueLevel;
+  struct proc* p = myproc();
+  if (p == 0) return -1;
+
+  int level = p->level;
+  if (level < 0 || level > 2) return -1;
+
+  return level;
 }
 
 void setPriority(int pid, int priority)
 {
-  ptable.proc[pid].priority = priority;
+  acquire(&ptable.lock);
+
+  struct proc* p = getProc(pid);
+  if (p) p->priority = priority;
+
+  release(&ptable.lock);
 }
 
 // TODO : schedulerLock, schedulerUnlock implementation
 void schedulerLock(int password)
 {
-  if (password == MY_ID)
-  {
-    
+  struct proc* p = myproc();
+  if (password != PASSWORD) {
+    cprintf("Wrong password\npid : %d\ntime quantum : %d\nlevel : %d\n", p->pid, p->tq, p->level);
+    exit();
+    return;
   }
+
+  ticks = 0;
+
+  acquire(&ptable.lock);
+
+  ptable.lockpid = p->pid;
+
+  release(&ptable.lock);
+
+  return;
 }
 
 void schedulerUnlock(int password)
 {
-  if (password == MY_ID)
-  {
-
+  struct proc* p = myproc();
+  if (password != PASSWORD) {
+    cprintf("Wrong password\npid : %d\ntime quantum : %d\nlevel : %d\n", p->pid, p->tq, p->level);
+    exit();
+    return;
   }
+
+  acquire(&ptable.lock);
+
+  if (ptable.lockpid && p->pid == ptable.lockpid) {
+    erasequeue(p->queue, p);
+    p->level = 0;
+    p->queue = ptable.queue;
+    pushfrontqueue(p->queue, p);
+
+    p->priority = 3;
+    p->tq = 0;
+
+    ptable.lockpid = 0;
+  }
+
+  release(&ptable.lock);
+
+  return;
+}
+
+// when called, ptable lock must be acquired
+struct proc* getProcessToRun() {
+  if (ptable.lockpid) return getProc(ptable.lockpid);
+  struct proc* p = NULL;
+  for (; ;) {
+    for (int i = 0; i < NQUEUE - 1; ++i) {
+      for (p = frontqueue(ptable.queue + i); p; p = p->next) {
+        if (p->state != RUNNABLE) continue;
+        return p;
+      }
+    }
+
+    int minPriority = 4;
+    for (struct proc* tmp = frontqueue(ptable.queue + NQUEUE - 1); tmp; tmp = tmp->next) {
+      if (tmp->state != RUNNABLE) continue;
+      if (tmp->priority < minPriority) {
+        minPriority = tmp->priority;
+        p = tmp;
+      }
+    }
+    return p;
+  }
+}
+
+// when called, ptable lock must be acquired
+void expireTimeQuantum(struct proc* p) {
+  p->tq = 0;
+  if (p->level < NQUEUE - 1) {
+    erasequeue(p->queue, p);
+    p->queue = p->queue + 1;
+    pushqueue(p->queue, p);
+    ++p->level;
+  }
+  else {
+    if (p->priority == 0) return;
+    --p->priority;
+  }
+}
+
+void printqueues() {
+        cprintf("//\n");
+      printqueue(ptable.queue);
+      printqueue(ptable.queue + 1);
+      printqueue(ptable.queue + 2);
+      cprintf("//\n");
+
 }

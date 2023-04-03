@@ -9,6 +9,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct queue;
 
 // bio.c
 void            binit(void);
@@ -191,11 +192,25 @@ void            clearpteu(pde_t *pgdir, char *uva);
 int             myfunction(char*);
 
 // project1 scheduler
-// schedsyscall.c
+// proc.c
+int             getTimeQuantum(int); 
+struct proc*    getProc(int);
+void            clearProc(struct proc*);
+void            boostPriority();
 int             getLevel(void);
 void            setPriority(int, int);
-void            schedulerLock(int);
-void            schedulerUnlock(int);
+void            schedulerLock();
+void            schedulerUnlock();
+struct proc*    getProcessToRun();
+void            expireTimeQuantum(struct proc*);
+
+// queue.c
+void printqueue(struct queue *);
+void pushqueue(struct queue *, struct proc *);
+void erasequeue(struct queue *, struct proc *);
+struct proc *popqueue(struct queue *);
+struct proc *frontqueue(struct queue *);
+void pushfrontqueue(struct queue*, struct proc*);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

@@ -38,3 +38,7 @@
 
 // lab4 practice
 #define T_MYINTERRUPT  128
+
+// project1 scheduler
+#define T_SCHEDLOCK    129
+#define T_SCHEDUNLOCK  130

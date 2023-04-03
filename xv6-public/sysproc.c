@@ -93,6 +93,7 @@ sys_uptime(void)
 // project1 scheduler
 
 // Wrapper for system calls
+// TODO : modify wrapper function exceptions and return value
 int sys_yield(void)
 {
   yield();
