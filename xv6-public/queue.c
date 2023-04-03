@@ -114,14 +114,17 @@ struct proc *frontqueue(struct queue *q)
   return q->front;
 }
 
-void pushfrontqueue(struct queue* q, struct proc* p) {
-  if (q->front == NULL) {
+void pushfrontqueue(struct queue *q, struct proc *p)
+{
+  if (q->front == NULL)
+  {
     q->front = q->back = p;
     p->prev = p->next = NULL;
     return;
   }
   ++q->size;
-  if (q->front == q->back) {
+  if (q->front == q->back)
+  {
     q->front = p;
     p->next = q->back;
     q->back->prev = p;
@@ -135,4 +138,3 @@ void pushfrontqueue(struct queue* q, struct proc* p) {
   p->next->prev = p;
   return;
 }
-
