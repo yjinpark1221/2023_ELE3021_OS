@@ -369,7 +369,7 @@ void scheduler(void)
         break;
     }
     for (struct proc* tmp = ptable.proc; tmp < &ptable.proc[NPROC]; ++tmp) {
-      if (p != tmp)tmp->tq = 0;
+      if (p != tmp) tmp->tq = 0;
     }
 
     if (p == NULL)
