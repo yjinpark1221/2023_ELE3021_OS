@@ -314,6 +314,9 @@ int wait(void)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
+        p->level = p->priority = p->tq = 0;
+        p->prev = p->next = NULL;
+        p->queue = NULL;
         release(&ptable.lock);
         return pid;
       }
@@ -379,7 +382,6 @@ void scheduler(void)
     c->proc = p;
     switchuvm(p);
     p->state = RUNNING;
-    // cprintf("running [\t%d\t] %s\n", p->pid, p->name);
     swtch(&(c->scheduler), p->context);
     switchkvm();
 
@@ -546,7 +548,6 @@ void procdump(void)
   struct proc *p;
   char *state;
   uint pc[10];
-
   for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
   {
     if (p->state == UNUSED)
@@ -748,6 +749,7 @@ void expireTimeQuantum(struct proc *p)
   }
 }
 
+// when called, ptable lock must be acquired
 void printqueues()
 {
   cprintf("//\n");
@@ -755,4 +757,24 @@ void printqueues()
   printqueue(ptable.queue + 1);
   printqueue(ptable.queue + 2);
   cprintf("//\n");
+}
+
+void setLevel(int n) {
+  struct proc *p = myproc();
+  if (p == 0)
+    return;
+
+  int level = p->level;
+  if (level < 0 || level > 2)
+    return;
+  if (n < 0 || level > 2) 
+    return;
+  acquire(&ptable.lock);
+
+  erasequeue(p->queue, p);
+  pushqueue(ptable.queue + n, p);
+  p->level = n;
+
+  release(&ptable.lock);
+  return;
 }

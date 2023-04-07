@@ -203,6 +203,8 @@ void            schedulerLock();
 void            schedulerUnlock();
 struct proc*    getProcessToRun();
 void            expireTimeQuantum(struct proc*);
+void            printqueues(void);
+void            setLevel(int);
 
 // queue.c
 void printqueue(struct queue *);

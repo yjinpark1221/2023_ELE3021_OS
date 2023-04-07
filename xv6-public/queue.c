@@ -21,6 +21,9 @@ void printqueue(struct queue *q)
 
 void erasequeue(struct queue *q, struct proc *p)
 {
+  if (p->queue != q) {
+    panic("erasequeue:");
+  }
   if (q == NULL || p == NULL)
     return;
   bool found = 0;

@@ -194,3 +194,13 @@ for 문 안에서
 3. context switch한다. 
 (프로세스가 ptable lock을 release하고 다시 scheduler로 context switch하기 전에 ptable의 lock을 acquire하고 state을 running이 아닌 것으로 바꿨을 것을 기대한다.)
 5. ptable lock을 release한다. 
+
+### allocproc 함수
+
+You are correct, my apologies for the mistake. In the allocproc() function in xv6, the ptable.lock is held while searching for an unused process proc struct in the ptable and updating the state of the proc struct to EMBRYO.
+
+However, the lock is released before allocating the kernel stack and setting up the trapframe and context structs for the new process. This is because these steps do not involve concurrent access to the ptable or any other shared data structure that requires synchronization.
+
+The kernel stack, trapframe, and context are allocated and initialized locally to the new process, so there is no risk of other CPUs concurrently modifying them. Therefore, it is safe to release the ptable.lock before these steps to minimize lock contention and improve system performance.
+
+It's worth noting that the trapframe and context structs are used to set up the execution context for the process when it is first scheduled to run. These structs are private to each process and are not accessed or modified by other processes, so there is no need to hold the ptable.lock while initializing them. - GPT
