@@ -38,7 +38,6 @@ int fork_children2()
   {
     if ((p = fork()) == 0)
     {
-      yield();
       return getpid();
     }
     else

@@ -96,7 +96,7 @@ found:
   p->state = EMBRYO;
   p->pid = nextpid++;
 
-  p->priority = 0;
+  p->priority = 3;
   p->next = p->prev = NULL;
   pushqueue(ptable.queue, p);
 
@@ -315,7 +315,7 @@ int wait(void)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
-        p->priority = p->tq = 0;
+        p->priority = p->tq = -1;
         release(&ptable.lock);
         return pid;
       }
