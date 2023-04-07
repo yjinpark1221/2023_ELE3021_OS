@@ -374,10 +374,12 @@ void scheduler(void)
       continue;
     }
     ++p->tq;
-
+    // printqueues();
+    // cprintf("running %d\n\n", p->pid);
     // Switch to chosen process.  It is the process's job
     // to release ptable.lock and then reacquire it
     // before jumping back to us.
+    // cprintf("chose %d to run!\ttick%d\tlevel%d\n", p->pid, p->tq, p->level);
     c->proc = p;
     switchuvm(p);
     p->state = RUNNING;
@@ -555,7 +557,7 @@ void procdump(void)
       state = states[p->state];
     else
       state = "???";
-    cprintf("%d %s %s", p->pid, state, p->name);
+    cprintf("%d %s %s level%d tick%d", p->pid, state, p->name, p->level, p->tq);
     if (p->state == SLEEPING)
     {
       getcallerpcs((uint *)p->context->ebp + 2, pc);
@@ -564,6 +566,7 @@ void procdump(void)
     }
     cprintf("\n");
   }
+  printqueues();
 }
 
 // project1 scheduler
@@ -601,7 +604,6 @@ void clearProc(struct proc *p)
 void boostPriority()
 {
   acquire(&ptable.lock);
-  // printqueues();
 
   if (ptable.lockpid)
     schedulerUnlock(PASSWORD);
