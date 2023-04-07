@@ -26,3 +26,4 @@
 #define SYS_setPriority     25
 #define SYS_schedulerLock   26
 #define SYS_schedulerUnlock 27
+#define SYS_setLevel        28

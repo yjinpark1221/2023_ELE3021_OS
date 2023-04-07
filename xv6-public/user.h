@@ -31,6 +31,7 @@ int getLevel(void);
 void setPriority(int, int);
 void schedulerLock(int);
 void schedulerUnlock(int);
+void setLevel(int, int);
 
 // ulib.c
 int stat(const char*, struct stat*);

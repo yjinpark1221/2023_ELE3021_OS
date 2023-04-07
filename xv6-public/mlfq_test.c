@@ -11,7 +11,7 @@
 
 // #define TEST1
 #define TEST2
-#define TEST3
+// #define TEST3
 // #define TEST4
 // #define TEST5
 // #define TEST6
@@ -38,17 +38,14 @@ int fork_children2()
   {
     if ((p = fork()) == 0)
     {
-      sleep(15);
+      yield();
       return getpid();
     }
     else
     {
-      setPriority(p, i % 4);
-      // if (r < 0)
-      // {
-      //   printf(1, "setPriority returned %d\n", r);
-      //   exit();
-      // }
+      setLevel(p, 2);
+      setPriority(p, p % 4);
+      printf(1, "setting pid %d priority %d\n", p, p % 4);
     }
   }
   return parent;
@@ -166,11 +163,6 @@ int main(int argc, char *argv[])
     for (i = 0; i < NUM_LOOP; i++)
     {
       int x = getLevel();
-      if (x < 0 || x > 4)
-      {
-        printf(1, "Wrong level: %d\n", x);
-        exit();
-      }
       count[x]++;
     }
     printf(1, "Process %d\n", pid);

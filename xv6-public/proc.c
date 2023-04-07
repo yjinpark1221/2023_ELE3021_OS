@@ -754,19 +754,15 @@ void printqueues()
   cprintf("//\n");
 }
 
-void setLevel(int n) {
-  struct proc *p = myproc();
-  if (p == 0)
-    return;
-
-  if (n < 0 || n > 2) 
-    return;
-    
+void setLevel(int pid, int level) {
   acquire(&ptable.lock);
 
-  erasequeue(p->queue, p);
-  pushqueue(ptable.queue + n, p);
+  struct proc *p = getProc(pid);
+  if (p) {
+    erasequeue(p->queue, p);
+    pushqueue(ptable.queue + level, p);
 
+  }
   release(&ptable.lock);
   return;
 }

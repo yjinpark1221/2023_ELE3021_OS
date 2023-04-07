@@ -131,3 +131,13 @@ int sys_schedulerUnlock(void)
   schedulerUnlock(password);
   return 0;
 }
+
+
+int sys_setLevel(void)
+{
+  int pid, level;
+  if (argint(0, &pid) < 0 || argint(1, &level) < 0)
+    return -1;
+  setLevel(pid, level);
+  return 0;
+}
