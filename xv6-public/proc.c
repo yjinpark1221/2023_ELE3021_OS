@@ -95,9 +95,8 @@ found:
 
   p->level = 0;
   p->priority = 0;
-  p->queue = ptable.queue;
   p->next = p->prev = NULL;
-  pushqueue(p->queue, p);
+  pushqueue(ptable.queue, p);
 
   release(&ptable.lock);
 
@@ -316,7 +315,6 @@ int wait(void)
         p->state = UNUSED;
         p->level = p->priority = p->tq = 0;
         p->prev = p->next = NULL;
-        p->queue = NULL;
         release(&ptable.lock);
         return pid;
       }
@@ -597,13 +595,13 @@ void clearProc(struct proc *p)
   p->tq = 0;
   p->level = 0;
   erasequeue(p->queue, p);
-  p->queue = ptable.queue;
-  pushqueue(p->queue, p);
+  pushqueue(ptable.queue, p);
 }
 
 void boostPriority()
 {
   acquire(&ptable.lock);
+  // printqueues();
 
   if (ptable.lockpid)
     schedulerUnlock(PASSWORD);
@@ -683,8 +681,7 @@ void schedulerUnlock(int password)
   {
     erasequeue(p->queue, p);
     p->level = 0;
-    p->queue = ptable.queue;
-    pushfrontqueue(p->queue, p);
+    pushfrontqueue(ptable.queue, p);
 
     p->priority = 3;
     p->tq = 0;
@@ -736,9 +733,9 @@ void expireTimeQuantum(struct proc *p)
   p->tq = 0;
   if (p->level < NQUEUE - 1)
   {
+    struct queue* tmpq = p->queue;
     erasequeue(p->queue, p);
-    p->queue = p->queue + 1;
-    pushqueue(p->queue, p);
+    pushqueue(tmpq, p);
     ++p->level;
   }
   else
