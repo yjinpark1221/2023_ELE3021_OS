@@ -368,6 +368,10 @@ void scheduler(void)
       else
         break;
     }
+    for (struct proc* tmp = ptable.proc; tmp < &ptable.proc[NPROC]; ++tmp) {
+      if (p != tmp)tmp->tq = 0;
+    }
+
     if (p == NULL)
     {
       release(&ptable.lock);
