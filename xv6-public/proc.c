@@ -26,6 +26,9 @@ static void wakeup1(void *chan);
 void pinit(void)
 {
   initlock(&ptable.lock, "ptable");
+  for (int i = 0; i < NQUEUE; ++i) {
+    ptable.queue[i].level = i;
+  }
 }
 
 // Must be called with interrupts disabled
@@ -93,7 +96,6 @@ found:
   p->state = EMBRYO;
   p->pid = nextpid++;
 
-  p->level = 0;
   p->priority = 0;
   p->next = p->prev = NULL;
   pushqueue(ptable.queue, p);
@@ -313,8 +315,7 @@ int wait(void)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
-        p->level = p->priority = p->tq = 0;
-        p->prev = p->next = NULL;
+        p->priority = p->tq = 0;
         release(&ptable.lock);
         return pid;
       }
@@ -593,7 +594,6 @@ void clearProc(struct proc *p)
     return;
   p->priority = 3;
   p->tq = 0;
-  p->level = 0;
   erasequeue(p->queue, p);
   pushqueue(ptable.queue, p);
 }
@@ -680,7 +680,6 @@ void schedulerUnlock(int password)
   if (ptable.lockpid && p->pid == ptable.lockpid)
   {
     erasequeue(p->queue, p);
-    p->level = 0;
     pushfrontqueue(ptable.queue, p);
 
     p->priority = 3;
@@ -736,7 +735,6 @@ void expireTimeQuantum(struct proc *p)
     struct queue* tmpq = p->queue;
     erasequeue(p->queue, p);
     pushqueue(tmpq, p);
-    ++p->level;
   }
   else
   {
@@ -761,16 +759,13 @@ void setLevel(int n) {
   if (p == 0)
     return;
 
-  int level = p->level;
-  if (level < 0 || level > 2)
+  if (n < 0 || n > 2) 
     return;
-  if (n < 0 || level > 2) 
-    return;
+    
   acquire(&ptable.lock);
 
   erasequeue(p->queue, p);
   pushqueue(ptable.queue + n, p);
-  p->level = n;
 
   release(&ptable.lock);
   return;

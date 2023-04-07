@@ -42,6 +42,7 @@ void erasequeue(struct queue *q, struct proc *p)
     panic("not in queue\n");
   }
   p->queue = NULL;
+  p->level = -1;
   --q->size;
   if (q->front == q->back)
   {
@@ -84,6 +85,7 @@ void pushqueue(struct queue *q, struct proc *n)
     return;
   }
   n->queue = q;
+  n->level = n->queue->level;
   ++q->size;
   n->prev = q->back;
   if (q->back == NULL)
@@ -105,6 +107,8 @@ struct proc *popqueue(struct queue *q)
     return ret;
   }
   ret->queue = NULL;
+  ret->level = -1;
+
   --q->size;
   if (q->front == q->back)
   {
@@ -132,6 +136,7 @@ void pushfrontqueue(struct queue *q, struct proc *p)
   }
 
   p->queue = q;
+  p->level = p->queue->level;
   if (q->front == NULL)
   {
     q->front = q->back = p;
