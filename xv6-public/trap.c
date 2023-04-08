@@ -122,11 +122,6 @@ trap(struct trapframe *tf)
      tf->trapno == T_IRQ0+IRQ_TIMER)
     yield();
 
-  // // project1 scheduler
-  // if(myproc() && myproc()->state == RUNNING &&
-  //    tf->trapno == T_IRQ0+IRQ_TIMER && ticks == 100)
-  //   boostPriority();
-
   // Check if the process has been killed since we yielded
   if(myproc() && myproc()->killed && (tf->cs&3) == DPL_USER)
     exit();
