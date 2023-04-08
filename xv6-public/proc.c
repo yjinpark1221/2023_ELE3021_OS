@@ -96,6 +96,9 @@ found:
   p->state = EMBRYO;
   p->pid = nextpid++;
 
+  // project1 scheduler
+  // initialize priority, prev, next, queue of the process
+  // push the process into L0 queue
   p->priority = 3;
   p->next = p->prev = NULL;
   pushqueue(ptable.queue, p);
@@ -305,6 +308,9 @@ int wait(void)
       if (p->state == ZOMBIE)
       {
         // Found one.
+
+        // project1 scheduler 
+        // erase process from the queue
         erasequeue(p->queue, p);
         pid = p->pid;
         kfree(p->kstack);
@@ -315,7 +321,9 @@ int wait(void)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
+        // clear priority, tq
         p->priority = p->tq = -1;
+
         release(&ptable.lock);
         return pid;
       }
@@ -352,7 +360,7 @@ void scheduler(void)
     // Enable interrupts on this processor.
     sti();
 
-    // Loop over process table looking for process to run.
+    // choose a process to run and check if the process has time quantum left
     acquire(&ptable.lock);
     for (;;)
     {
@@ -368,6 +376,8 @@ void scheduler(void)
       else
         break;
     }
+
+    // clear time quantums of the other process
     for (struct proc* tmp = ptable.proc; tmp < &ptable.proc[NPROC]; ++tmp) {
       if (p != tmp) tmp->tq = 0;
     }
@@ -377,6 +387,8 @@ void scheduler(void)
       release(&ptable.lock);
       continue;
     }
+
+    // mark that the process used one tick
     ++p->tq;
 
     // Switch to chosen process.  It is the process's job
@@ -570,14 +582,17 @@ void procdump(void)
   }
 }
 
+// functions for 
 // project1 scheduler
 
+// calculates time quantum for each level
 int getTimeQuantum(int i)
 {
   return 2 * i + 4;
 }
 
 // when called, ptable lock must be acquired
+// return proc pointer of that pid
 struct proc *getProc(int pid)
 {
   struct proc *p;
@@ -592,6 +607,9 @@ struct proc *getProc(int pid)
 }
 
 // when called, ptable lock must be acquired
+// called in boostPriority function for every process
+// clears priority, tq
+// move to L0 queue
 void clearProc(struct proc *p)
 {
   if (p == NULL || p->state == UNUSED)
@@ -602,6 +620,9 @@ void clearProc(struct proc *p)
   pushqueue(ptable.queue, p);
 }
 
+// called in trap.c every 100 ticks
+// if scheduler is locked, unlock scheduler
+// move every process to L0 queue by calling clearProc function
 void boostPriority()
 {
   acquire(&ptable.lock);
@@ -623,81 +644,9 @@ void boostPriority()
   release(&ptable.lock);
 }
 
-int getLevel()
-{
-  struct proc *p = myproc();
-  if (p == 0)
-    return -1;
-
-  int level = p->level;
-  if (level < 0 || level > 2)
-    return -1;
-
-  return level;
-}
-
-void setPriority(int pid, int priority)
-{
-  acquire(&ptable.lock);
-
-  struct proc *p = getProc(pid);
-  if (p)
-    p->priority = priority;
-
-  release(&ptable.lock);
-}
-
-// TODO : schedulerLock, schedulerUnlock implementation
-void schedulerLock(int password)
-{
-  struct proc *p = myproc();
-  if (password != PASSWORD)
-  {
-    cprintf("Wrong password\npid : %d\ntime quantum : %d\nlevel : %d\n", p->pid, p->tq, p->level);
-    exit();
-    return;
-  }
-
-  ticks = 0;
-
-  acquire(&ptable.lock);
-
-  ptable.lockpid = p->pid;
-
-  release(&ptable.lock);
-
-  return;
-}
-
-void schedulerUnlock(int password)
-{
-  struct proc *p = myproc();
-  if (password != PASSWORD)
-  {
-    cprintf("Wrong password\npid : %d\ntime quantum : %d\nlevel : %d\n", p->pid, p->tq, p->level);
-    exit();
-    return;
-  }
-
-  acquire(&ptable.lock);
-
-  if (ptable.lockpid && p->pid == ptable.lockpid)
-  {
-    erasequeue(p->queue, p);
-    pushfrontqueue(ptable.queue, p);
-
-    p->priority = 3;
-    p->tq = 0;
-
-    ptable.lockpid = 0;
-  }
-
-  release(&ptable.lock);
-
-  return;
-}
-
 // when called, ptable lock must be acquired
+// called in scheduler function
+// returns a process to run (checking time quantum is not included)
 struct proc *getProcessToRun()
 {
   if (ptable.lockpid)
@@ -731,6 +680,7 @@ struct proc *getProcessToRun()
 }
 
 // when called, ptable lock must be acquired
+// moves to lower queue or change priority
 void expireTimeQuantum(struct proc *p)
 {
   p->tq = 0;
@@ -738,7 +688,7 @@ void expireTimeQuantum(struct proc *p)
   {
     struct queue* tmpq = p->queue;
     erasequeue(p->queue, p);
-    pushqueue(tmpq, p);
+    pushqueue(tmpq + 1, p);
   }
   else
   {
@@ -749,6 +699,7 @@ void expireTimeQuantum(struct proc *p)
 }
 
 // when called, ptable lock must be acquired
+// print all queues for debugging
 void printqueues()
 {
   cprintf("//\n");
@@ -758,6 +709,90 @@ void printqueues()
   cprintf("//\n");
 }
 
+// system calls
+// returns queue level
+int getLevel()
+{
+  struct proc *p = myproc();
+  if (p == 0)
+    return -1;
+
+  int level = p->level;
+  if (level < 0 || level > 2)
+    return -1;
+
+  return level;
+}
+
+// sets priority
+void setPriority(int pid, int priority)
+{
+  acquire(&ptable.lock);
+
+  struct proc *p = getProc(pid);
+  if (p)
+    p->priority = priority;
+
+  release(&ptable.lock);
+}
+
+// locks scheduler
+// scheduler can only run current process
+void schedulerLock(int password)
+{
+  struct proc *p = myproc();
+  if (password != PASSWORD)
+  {
+    cprintf("Wrong password\npid : %d\ntime quantum : %d\nlevel : %d\n", p->pid, p->tq, p->level);
+    exit();
+    return;
+  }
+
+  ticks = 0;
+
+  acquire(&ptable.lock);
+
+  ptable.lockpid = p->pid;
+
+  release(&ptable.lock);
+
+  return;
+}
+
+// unlocks scheduler
+// if wrong password, print error message and exit
+// if password is correct and called by process that has locked the scheduler,
+// back to mlfq, current process to L0 front
+void schedulerUnlock(int password)
+{
+  struct proc *p = myproc();
+  if (password != PASSWORD)
+  {
+    cprintf("Wrong password\npid : %d\ntime quantum : %d\nlevel : %d\n", p->pid, p->tq, p->level);
+    exit();
+    return;
+  }
+
+  acquire(&ptable.lock);
+
+  if (ptable.lockpid && p->pid == ptable.lockpid)
+  {
+    erasequeue(p->queue, p);
+    pushfrontqueue(ptable.queue, p);
+
+    p->priority = 3;
+    p->tq = 0;
+
+    ptable.lockpid = 0;
+  }
+
+  release(&ptable.lock);
+
+  return;
+}
+
+// for debugging and test code
+// moves to queue of that level
 void setLevel(int pid, int level) {
   acquire(&ptable.lock);
 
