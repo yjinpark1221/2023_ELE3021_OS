@@ -644,6 +644,9 @@ void clearProc(struct proc *p)
 // move every process to L0 queue by calling clearProc function
 void boostPriority()
 {
+#ifdef DEBUG
+  cprintf("[[[ boosting ]]]\n");
+#endif
   ptable.ticks = 0;
 
   if (ptable.lockpid) {
@@ -707,6 +710,9 @@ struct proc *getProcessToRun()
 // moves to lower queue or change priority
 void expireTimeQuantum(struct proc *p)
 {
+#ifdef DEBUG
+  cprintf("[[[ %d tq expired ]]]\n", p->pid);
+#endif
   p->tq = 0;
   if (p->level < NQUEUE - 1)
   {
@@ -791,6 +797,10 @@ void schedulerLock(int password)
     release(&ptable.lock);
     exit();
   }
+
+#ifdef DEBUG
+  cprintf("[[[ locking scheduler ]]]\n");
+#endif
   ptable.lockpid = p->pid;
 
   release(&ptable.lock);
@@ -828,6 +838,10 @@ void schedulerUnlock(int password)
     p->priority = 3;
     p->tq = 0;
   }
+
+#ifdef DEBUG
+  cprintf("[[[ unlocking scheduler ]]]\n");
+#endif
 
   ptable.lockpid = 0;
 
