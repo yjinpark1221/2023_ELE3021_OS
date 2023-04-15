@@ -13,6 +13,7 @@ struct
   struct proc proc[NPROC];
   struct queue queue[NQUEUE];
   int lockpid;
+  int ticks;
 } ptable;
 
 static struct proc *initproc;
@@ -101,6 +102,7 @@ found:
   // push the process into L0 queue
   p->priority = 3;
   p->next = p->prev = NULL;
+  p->tq = 0;
   pushqueue(ptable.queue, p);
 
   release(&ptable.lock);
@@ -265,8 +267,17 @@ void exit(void)
   end_op();
   curproc->cwd = 0;
 
+
   acquire(&ptable.lock);
 
+  // schedulerUnlock manually
+  if (ptable.lockpid == curproc->pid) {
+    release(&ptable.lock);
+    // lockpid does not change between release and schedulerLock
+    schedulerUnlock(PASSWORD);
+    acquire(&ptable.lock);
+  }
+  
   // Parent might be sleeping in wait().
   wakeup1(curproc->parent);
 
@@ -377,11 +388,6 @@ void scheduler(void)
         break;
     }
 
-    // // clear time quantums of the other process
-    // for (struct proc* tmp = ptable.proc; tmp < &ptable.proc[NPROC]; ++tmp) {
-    //   if (p != tmp) tmp->tq = 0;
-    // }
-
     if (p == NULL)
     {
       release(&ptable.lock);
@@ -390,6 +396,7 @@ void scheduler(void)
 
     // mark that the process used one tick
     ++p->tq;
+    ++ptable.ticks;
 
     // for ROUND ROBIN in L0, L1
     // move the process to back of the queue
@@ -402,6 +409,7 @@ void scheduler(void)
     // Switch to chosen process.  It is the process's job
     // to release ptable.lock and then reacquire it
     // before jumping back to us.
+    // cprintf(" [ %d, L%d ( %d ), tq %d / %d ]  running\n", p->pid, p->level, p->priority, p->tq, getTimeQuantum(p->level));
     c->proc = p;
     switchuvm(p);
     p->state = RUNNING;
@@ -411,6 +419,8 @@ void scheduler(void)
     // Process is done running for now.
     // It should have changed its p->state before coming back.
     c->proc = 0;
+
+    if (ptable.ticks == 100) boostPriority();
     release(&ptable.lock);
   }
 }
@@ -628,17 +638,21 @@ void clearProc(struct proc *p)
   pushqueue(ptable.queue, p);
 }
 
-// called in trap.c every 100 ticks
+// when called, ptable lock must be acquired
+// called in scheduler() every 100 ticks ()
 // if scheduler is locked, unlock scheduler
 // move every process to L0 queue by calling clearProc function
 void boostPriority()
 {
-  acquire(&ptable.lock);
-  // printqueues();
+  ptable.ticks = 0;
 
-  if (ptable.lockpid)
+  if (ptable.lockpid) {
+    release(&ptable.lock);
+    // lockpid does not change between release and schedulerLock
     schedulerUnlock(PASSWORD);
-  ticks = 0;
+    acquire(&ptable.lock);
+  }
+
   for (int i = 0; i < NPROC; ++i)
   {
     for (struct proc *p = ptable.proc; p < &ptable.proc[NPROC]; ++p)
@@ -649,7 +663,6 @@ void boostPriority()
       }
     }
   }
-  release(&ptable.lock);
 }
 
 // when called, ptable lock must be acquired
@@ -657,8 +670,11 @@ void boostPriority()
 // returns a process to run (checking time quantum is not included)
 struct proc *getProcessToRun()
 {
-  if (ptable.lockpid)
-    return getProc(ptable.lockpid);
+  if (ptable.lockpid) {
+    struct proc* p = getProc(ptable.lockpid);
+    if (p->state == RUNNABLE) return p;
+    return NULL;
+  }
   struct proc *p = NULL;
   for (;;)
   {
@@ -707,7 +723,7 @@ void expireTimeQuantum(struct proc *p)
 }
 
 // when called, ptable lock must be acquired
-// print all queues for debugging
+// for debugging, print all queues for debugging
 void printqueues()
 {
   cprintf("//\n");
@@ -726,7 +742,7 @@ int getLevel()
     return -1;
 
   int level = p->level;
-  if (level < 0 || level > 2)
+  if (level < 0 || level >= NQUEUE)
     return -1;
 
   return level;
@@ -735,12 +751,18 @@ int getLevel()
 // sets priority
 void setPriority(int pid, int priority)
 {
+  if (priority < 0 || priority > 3) {
+    cprintf("[WARN] Invalid priority\n");
+    return;
+  }
   acquire(&ptable.lock);
 
   struct proc *p = getProc(pid);
   if (p)
     p->priority = priority;
-
+  else {
+    cprintf("[WARN] Invalid pid\n");
+  }
   release(&ptable.lock);
 }
 
@@ -751,15 +773,24 @@ void schedulerLock(int password)
   struct proc *p = myproc();
   if (password != PASSWORD)
   {
-    cprintf("Wrong password\npid : %d\ntime quantum : %d\nlevel : %d\n", p->pid, p->tq, p->level);
+    cprintf("[ERROR] Wrong password\npid : %d\ntime quantum : %d\nlevel : %d\n", p->pid, p->tq, p->level);
     exit();
     return;
   }
 
-  ticks = 0;
-
   acquire(&ptable.lock);
 
+  ptable.ticks = 0;
+  
+  if (ptable.lockpid == p->pid) {
+    cprintf("[WARN] Already locked scheduler\n");
+  }
+  else if (ptable.lockpid) {
+    // this never happens because other processes cannot get CPU from scheduler(single core)
+    cprintf("[ERROR] Already Locked by another process\n");
+    release(&ptable.lock);
+    exit();
+  }
   ptable.lockpid = p->pid;
 
   release(&ptable.lock);
@@ -774,34 +805,52 @@ void schedulerLock(int password)
 void schedulerUnlock(int password)
 {
   struct proc *p = myproc();
-  if (password != PASSWORD)
+  acquire(&ptable.lock);
+
+  if (ptable.lockpid == 0)
   {
-    cprintf("Wrong password\npid : %d\ntime quantum : %d\nlevel : %d\n", p->pid, p->tq, p->level);
-    exit();
+    cprintf("[WARN] Trying to unlock scheduler (currently not locked)\n");
+    release(&ptable.lock);
     return;
   }
 
-  acquire(&ptable.lock);
-
-  if (ptable.lockpid && p->pid == ptable.lockpid)
+  if (p && p->pid != ptable.lockpid)
   {
+    cprintf("[WARN] Trying to unlock scheduler (not locked by this process)\n");
+    release(&ptable.lock);
+    return;
+  }
+
+  if (p) {
     erasequeue(p->queue, p);
     pushfrontqueue(ptable.queue, p);
 
     p->priority = 3;
     p->tq = 0;
-
-    ptable.lockpid = 0;
   }
+
+  ptable.lockpid = 0;
 
   release(&ptable.lock);
 
+  if (password != PASSWORD)
+  {
+    cprintf("[ERROR] Wrong password\n\tpid : %d\n\ttime quantum : %d\n\tlevel : %d\n", p ? p->pid : -1, p ? p->tq : -1, p ? p->level : -1);
+    exit();
+    return;
+  }
   return;
 }
 
 // for debugging and test code
 // moves to queue of that level
 void setLevel(int pid, int level) {
+
+  if (level < 0 || level > 3) {
+    cprintf("[WARN] Invalid level\n");
+    return;
+  }
+
   acquire(&ptable.lock);
 
   struct proc *p = getProc(pid);
@@ -810,6 +859,10 @@ void setLevel(int pid, int level) {
     pushqueue(ptable.queue + level, p);
 
   }
+  else {
+    cprintf("[WARN] Invalid pid\n");
+  }
+
   release(&ptable.lock);
   return;
 }
