@@ -13,7 +13,6 @@ struct
   struct proc proc[NPROC];
   struct queue queue[NQUEUE];
   int lockpid;
-  int ticks;
 } ptable;
 
 static struct proc *initproc;
@@ -396,7 +395,6 @@ void scheduler(void)
 
     // mark that the process used one tick
     ++p->tq;
-    ++ptable.ticks;
 
     // for ROUND ROBIN in L0, L1
     // move the process to back of the queue
@@ -420,7 +418,10 @@ void scheduler(void)
     // It should have changed its p->state before coming back.
     c->proc = 0;
 
-    if (ptable.ticks == 100) boostPriority();
+    acquire(&tickslock);
+    uint xticks = ticks;
+    release(&tickslock);
+    if (xticks >= 100) boostPriority();
     release(&ptable.lock);
   }
 }
@@ -647,7 +648,9 @@ void boostPriority()
 #ifdef DEBUG
   cprintf("[[[ boosting ]]]\n");
 #endif
-  ptable.ticks = 0;
+  acquire(&tickslock);
+  ticks = 0;
+  release(&tickslock);
 
   if (ptable.lockpid) {
     release(&ptable.lock);
@@ -676,7 +679,13 @@ struct proc *getProcessToRun()
   if (ptable.lockpid) {
     struct proc* p = getProc(ptable.lockpid);
     if (p->state == RUNNABLE) return p;
-    return NULL;
+    else {
+      // unlock and get runnable process
+      cprintf("[WARN] Scheduler locked by process that is NOT RUNNABLE\n\tUnlocking scheduler for CPU utilization\n");
+      release(&ptable.lock);
+      schedulerUnlock(PASSWORD);
+      acquire(&ptable.lock);
+    }
   }
   struct proc *p = NULL;
   for (;;)
@@ -776,17 +785,18 @@ void setPriority(int pid, int priority)
 // scheduler can only run current process
 void schedulerLock(int password)
 {
+
+  acquire(&ptable.lock);
+
   struct proc *p = myproc();
   if (password != PASSWORD)
   {
     cprintf("[ERROR] Wrong password\npid : %d\ntime quantum : %d\nlevel : %d\n", p->pid, p->tq, p->level);
-    exit();
+    p->killed = 1;
+
+    release(&ptable.lock);
     return;
   }
-
-  acquire(&ptable.lock);
-
-  ptable.ticks = 0;
   
   if (ptable.lockpid == p->pid) {
     cprintf("[WARN] Already locked scheduler\n");
@@ -794,8 +804,10 @@ void schedulerLock(int password)
   else if (ptable.lockpid) {
     // this never happens because other processes cannot get CPU from scheduler(single core)
     cprintf("[ERROR] Already Locked by another process\n");
+    p->killed = 1;
+
     release(&ptable.lock);
-    exit();
+    return;
   }
 
 #ifdef DEBUG
@@ -804,6 +816,10 @@ void schedulerLock(int password)
   ptable.lockpid = p->pid;
 
   release(&ptable.lock);
+
+  acquire(&tickslock);
+  ticks = 0;
+  release(&tickslock);
 
   return;
 }
@@ -817,9 +833,20 @@ void schedulerUnlock(int password)
   struct proc *p = myproc();
   acquire(&ptable.lock);
 
+  if (password != PASSWORD)
+  {
+    cprintf("[ERROR] Wrong password\n\tpid : %d\n\ttime quantum : %d\n\tlevel : %d\n", p ? p->pid : -1, p ? p->tq : -1, p ? p->level : -1);
+    p->killed = 1;
+
+    release(&ptable.lock);
+    return;
+  }
+
+
   if (ptable.lockpid == 0)
   {
     cprintf("[WARN] Trying to unlock scheduler (currently not locked)\n");
+
     release(&ptable.lock);
     return;
   }
@@ -827,6 +854,7 @@ void schedulerUnlock(int password)
   if (p && p->pid != ptable.lockpid)
   {
     cprintf("[WARN] Trying to unlock scheduler (not locked by this process)\n");
+
     release(&ptable.lock);
     return;
   }
@@ -847,12 +875,6 @@ void schedulerUnlock(int password)
 
   release(&ptable.lock);
 
-  if (password != PASSWORD)
-  {
-    cprintf("[ERROR] Wrong password\n\tpid : %d\n\ttime quantum : %d\n\tlevel : %d\n", p ? p->pid : -1, p ? p->tq : -1, p ? p->level : -1);
-    exit();
-    return;
-  }
   return;
 }
 
