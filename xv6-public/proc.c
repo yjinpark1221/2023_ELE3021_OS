@@ -389,6 +389,11 @@ void scheduler(void)
 
     if (p == NULL)
     {
+      acquire(&tickslock);
+      uint xticks = ticks;
+      release(&tickslock);
+      if (xticks >= 100) boostPriority();
+      
       release(&ptable.lock);
       continue;
     }
@@ -649,9 +654,9 @@ void clearProc(struct proc *p)
 // move every process to L0 queue by calling clearProc function
 void boostPriority()
 {
-// #ifdef DEBUG
+#ifdef DEBUG
   cprintf("[[[ boosting ]]]\n");
-// #endif
+#endif
   acquire(&tickslock);
   ticks = 0;
   release(&tickslock);
