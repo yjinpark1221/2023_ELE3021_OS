@@ -234,7 +234,6 @@ int fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
-  cprintf("\nforked\n");
   release(&ptable.lock);
 
   return pid;
@@ -411,8 +410,8 @@ void scheduler(void)
 
 #ifdef DEBUG
     cprintf(" [ %d, L%d ( %d ), tq %d / %d ]  running\n", p->pid, p->level, p->priority, p->tq, getTimeQuantum(p->level));
-#endif
     cprintf("\tpid %d\tlevel%d\t|", p->pid, p->level);
+#endif
     c->proc = p;
     switchuvm(p);
     p->state = RUNNING;
