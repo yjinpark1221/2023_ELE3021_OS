@@ -389,12 +389,12 @@ void scheduler(void)
 
     if (p == NULL)
     {
+      release(&ptable.lock);
+
       acquire(&tickslock);
       uint xticks = ticks;
       release(&tickslock);
-      if (xticks >= 100) boostPriority();
-      
-      release(&ptable.lock);
+      if (xticks >= 100) boostPriority();      
       continue;
     }
 
@@ -427,11 +427,13 @@ void scheduler(void)
     // It should have changed its p->state before coming back.
     c->proc = 0;
 
+    release(&ptable.lock);
+
     acquire(&tickslock);
     uint xticks = ticks;
     release(&tickslock);
-    if (xticks >= 100) boostPriority();
-    release(&ptable.lock);
+    if (xticks >= 100) boostPriority();      
+
   }
 }
 
@@ -661,6 +663,7 @@ void boostPriority()
   ticks = 0;
   release(&tickslock);
 
+  acquire(&ptable.lock);
   if (ptable.lockpid) {
     release(&ptable.lock);
     // lockpid does not change between release and schedulerLock
@@ -678,6 +681,8 @@ void boostPriority()
       }
     }
   }
+
+  release(&ptable.lock);
 }
 
 // when called, ptable lock must be acquired
