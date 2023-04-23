@@ -396,6 +396,14 @@ void scheduler(void)
     // mark that the process used one tick
     ++p->tq;
 
+    // for ROUND ROBIN in L0, L1
+    // move the process to back of the queue
+    if (p->level < NQUEUE - 1) {
+      struct queue* tmp = p->queue;
+      erasequeue(p->queue, p);
+      pushqueue(tmp, p);
+    }
+
     // Switch to chosen process.  It is the process's job
     // to release ptable.lock and then reacquire it
     // before jumping back to us.
