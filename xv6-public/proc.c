@@ -399,7 +399,11 @@ void scheduler(void)
     // Switch to chosen process.  It is the process's job
     // to release ptable.lock and then reacquire it
     // before jumping back to us.
-    // cprintf(" [ %d, L%d ( %d ), tq %d / %d ]  running\n", p->pid, p->level, p->priority, p->tq, getTimeQuantum(p->level));
+
+#ifdef DEBUG
+    cprintf(" [ %d, L%d ( %d ), tq %d / %d ]  running\n", p->pid, p->level, p->priority, p->tq, getTimeQuantum(p->level));
+#endif
+
     c->proc = p;
     switchuvm(p);
     p->state = RUNNING;
@@ -759,7 +763,7 @@ int getLevel()
 void setPriority(int pid, int priority)
 {
   if (priority < 0 || priority > 3) {
-    cprintf("[WARN] Invalid priority\n");
+    cprintf("[WARN] Invalid priority\n\tPlease use 0, 1, 2, 3 as priority.\n");
     return;
   }
   acquire(&ptable.lock);
@@ -768,7 +772,13 @@ void setPriority(int pid, int priority)
   if (p)
     p->priority = priority;
   else {
-    cprintf("[WARN] Invalid pid\n");
+    cprintf("[WARN] Invalid pid\n\tPlease use ");
+    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+      if (p->state == RUNNABLE || p->state == RUNNING) {
+        cprintf("%d ", p->pid);
+      }
+      cprintf("as pid.\n");
+    }
   }
   release(&ptable.lock);
 }
@@ -791,7 +801,7 @@ void schedulerLock(int password)
   }
   
   if (ptable.lockpid == p->pid) {
-    cprintf("[WARN] Already locked scheduler\n");
+    cprintf("[WARN] Imprudent locking\n\tThis can affect performance of other processes\n");
   }
   else if (ptable.lockpid) {
     // this never happens because other processes cannot get CPU from scheduler(single core)
@@ -846,6 +856,7 @@ void schedulerUnlock(int password)
   if (p && p->pid != ptable.lockpid)
   {
     cprintf("[WARN] Trying to unlock scheduler (not locked by this process)\n");
+    cprintf("\tCurrent lockpid : %d, tried locking by %d\n", ptable.lockpid, p->pid);
 
     release(&ptable.lock);
     return;
@@ -876,6 +887,7 @@ void setLevel(int pid, int level) {
 
   if (level < 0 || level > 3) {
     cprintf("[WARN] Invalid level\n");
+    cprintf("\tPlease use 0, 1, 2 as level.\n");
     return;
   }
 
@@ -888,7 +900,13 @@ void setLevel(int pid, int level) {
 
   }
   else {
-    cprintf("[WARN] Invalid pid\n");
+    cprintf("[WARN] Invalid pid\n\tPlease use ");
+    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+      if (p->state == RUNNABLE || p->state == RUNNING) {
+        cprintf("%d ", p->pid);
+      }
+      cprintf("as pid.\n");
+    }
   }
 
   release(&ptable.lock);
