@@ -6,6 +6,7 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+// #define DEBUG
 
 struct
 {
@@ -233,7 +234,7 @@ int fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
-
+  cprintf("\nforked\n");
   release(&ptable.lock);
 
   return pid;
@@ -396,6 +397,14 @@ void scheduler(void)
     // mark that the process used one tick
     ++p->tq;
 
+    // for ROUND ROBIN in L0, L1
+    // move the process to back of the queue
+    if (p->level < NQUEUE - 1) {
+      struct queue* tmp = p->queue;
+      erasequeue(p->queue, p);
+      pushqueue(tmp, p);
+    }
+
     // Switch to chosen process.  It is the process's job
     // to release ptable.lock and then reacquire it
     // before jumping back to us.
@@ -403,7 +412,7 @@ void scheduler(void)
 #ifdef DEBUG
     cprintf(" [ %d, L%d ( %d ), tq %d / %d ]  running\n", p->pid, p->level, p->priority, p->tq, getTimeQuantum(p->level));
 #endif
-
+    cprintf("\tpid %d\tlevel%d\t|", p->pid, p->level);
     c->proc = p;
     switchuvm(p);
     p->state = RUNNING;
@@ -586,7 +595,7 @@ void procdump(void)
       state = states[p->state];
     else
       state = "???";
-    cprintf("%d %s %s", p->pid, state, p->name);
+    cprintf("%d %s %s L%d, tq %d / %d, priority %d", p->pid, state, p->name, p->level, p->tq, getTimeQuantum(p->level), p->priority);
     if (p->state == SLEEPING)
     {
       getcallerpcs((uint *)p->context->ebp + 2, pc);
@@ -641,9 +650,9 @@ void clearProc(struct proc *p)
 // move every process to L0 queue by calling clearProc function
 void boostPriority()
 {
-#ifdef DEBUG
+// #ifdef DEBUG
   cprintf("[[[ boosting ]]]\n");
-#endif
+// #endif
   acquire(&tickslock);
   ticks = 0;
   release(&tickslock);
@@ -717,6 +726,7 @@ void expireTimeQuantum(struct proc *p)
 {
 #ifdef DEBUG
   cprintf("[[[ %d tq expired ]]]\n", p->pid);
+  procdump();
 #endif
   p->tq = 0;
   if (p->level < NQUEUE - 1)
@@ -777,8 +787,8 @@ void setPriority(int pid, int priority)
       if (p->state == RUNNABLE || p->state == RUNNING) {
         cprintf("%d ", p->pid);
       }
-      cprintf("as pid.\n");
     }
+    cprintf("as pid.\n");
   }
   release(&ptable.lock);
 }
@@ -905,8 +915,8 @@ void setLevel(int pid, int level) {
       if (p->state == RUNNABLE || p->state == RUNNING) {
         cprintf("%d ", p->pid);
       }
-      cprintf("as pid.\n");
     }
+    cprintf("as pid.\n");
   }
 
   release(&ptable.lock);
