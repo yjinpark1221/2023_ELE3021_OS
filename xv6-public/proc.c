@@ -6,6 +6,7 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+// #define min(a, b) ((a) < (b) ? (a) : (b))
 
 struct {
   struct spinlock lock;
@@ -88,6 +89,7 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  p->limit = 0;
 
   release(&ptable.lock);
 
@@ -162,8 +164,13 @@ growproc(int n)
   struct proc *curproc = myproc();
 
   sz = curproc->sz;
+  uint newsz = sz + n;
+  if (curproc->limit && sz + n > curproc->limit) {
+    cprintf("[WARN] in growproc function, trying to exceed limit. growing till limit");
+    newsz = curproc->limit;
+  }
   if(n > 0){
-    if((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0)
+    if((sz = allocuvm(curproc->pgdir, sz, newsz)) == 0)
       return -1;
   } else if(n < 0){
     if((sz = deallocuvm(curproc->pgdir, sz, sz + n)) == 0)
@@ -295,6 +302,7 @@ wait(void)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
+        p->limit = 0;
         release(&ptable.lock);
         return pid;
       }
@@ -531,4 +539,35 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+struct proc *getProc(int pid)
+{
+  acquire(&ptable.lock);
+  struct proc *p;
+  for (p = ptable.proc; p < &ptable.proc[NPROC]; ++p)
+  {
+    if (p->pid == pid && p->state != UNUSED)
+    {
+      release(&ptable.lock);
+      return p;
+    }
+  }
+  release(&ptable.lock);
+  return 0;
+}
+
+int setmemorylimit(int pid, int limit) {
+  struct proc* p = getProc(pid);
+  if (p == 0) {
+    return -1;
+  }
+  if (limit < 0) {
+    return -1;
+  }
+  if (p->sz > limit) {
+    return -1;
+  }
+  p->limit = limit;
+  return 0;
 }
