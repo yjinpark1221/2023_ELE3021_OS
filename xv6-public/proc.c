@@ -217,6 +217,9 @@ fork(void)
 
   safestrcpy(np->name, curproc->name, sizeof(curproc->name));
 
+  np->limit = curproc->limit;
+  np->stacksize = curproc->stacksize;
+
   pid = np->pid;
 
   acquire(&ptable.lock);
