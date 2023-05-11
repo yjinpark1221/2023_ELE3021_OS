@@ -99,6 +99,7 @@ exec(char *path, char **argv)
   curproc->sz = sz;
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
+  curproc->stacksize = 1;
   switchuvm(curproc);
   freevm(oldpgdir);
   return 0;
@@ -214,6 +215,7 @@ exec2(char *path, char **argv, int stacksize)
   curproc->sz = sz;
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
+  curproc->stacksize = stacksize;
   switchuvm(curproc);
   freevm(oldpgdir);
   return 0;

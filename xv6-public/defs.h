@@ -123,6 +123,8 @@ void            wakeup(void*);
 void            yield(void);
 struct proc     *getProc(int pid);
 int             setmemorylimit(int pid, int limit);
+void            printProc(struct proc*);
+int             printProcList(void);
 
 // swtch.S
 void            swtch(struct context**, struct context*);

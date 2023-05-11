@@ -99,3 +99,7 @@ sys_setmemorylimit(void)
   }
   return setmemorylimit(pid, limit);
 }
+
+int sys_printProcList(void) {
+  return printProcList();
+}
