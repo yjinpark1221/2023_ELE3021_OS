@@ -26,6 +26,7 @@ int uptime(void);
 int exec2(char*, char**, int);
 int setmemorylimit(int, int);
 int printProcList(void);
+int thread_create(thread_t*, void*(void*), void*);
 
 // ulib.c
 int stat(const char*, struct stat*);
