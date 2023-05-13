@@ -49,7 +49,7 @@ main(int argc, char *argv[])
     }
     char* token = strtok(buffer, ' ');
     for (int i = 0; i < itypeCount; ++i) {
-      if (strncmp(instructions[i], token, sizeof instructions[i]) == 0) {
+      if (strcmp(instructions[i], token) == 0) {
         curIns = i;
         break;
       }

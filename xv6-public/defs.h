@@ -4,6 +4,7 @@ struct file;
 struct inode;
 struct pipe;
 struct proc;
+struct thread;
 struct rtcdate;
 struct spinlock;
 struct sleeplock;
@@ -125,6 +126,12 @@ struct proc     *getProc(int pid);
 int             setmemorylimit(int pid, int limit);
 void            printProc(struct proc*);
 int             printProcList(void);
+int             thidxtorun(struct proc*);
+int             copythproc(struct proc*, int);
+int             existrunnable(struct proc*);
+int             copyprocth(struct proc*, int);
+int             allocth(struct proc*);
+int             allthzombie(struct proc*);
 
 // swtch.S
 void            swtch(struct context**, struct context*);
