@@ -6,7 +6,7 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
-
+#define PRINTFL() cprintf("%s %d\n", __FUNCTION__, __LINE__)
 #define NEXTTH(i) (((i) + 1) % NTHREAD)
 struct {
   struct spinlock lock;
@@ -374,13 +374,11 @@ scheduler(void)
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
+      copythproc(p, thidx);
       c->proc = p;
       switchuvm(p);
-      copythproc(p, thidx);
       p->state = RUNNING;
       p->thread[thidx].state = RUNNING;
-    // procdump();
-      // cprintf("%d %d chosen\n", p->pid, p->thread[thidx].tid);
       swtch(&(c->scheduler), p->context);
       switchkvm();
 
@@ -391,7 +389,6 @@ scheduler(void)
       c->proc = 0;
     }
     release(&ptable.lock);
-
   }
 }
 
@@ -574,7 +571,7 @@ procdump(void)
       state = states[p->state];
     else
       state = "???";
-    cprintf("%d %s %s %d %d %d", p->pid, state, p->name, p->kstack, p->tf, p->context);
+    cprintf("%d %s %s %p %p %p", p->pid, state, p->name, p->kstack, p->tf, p->context);
     if(p->state == SLEEPING){
       getcallerpcs((uint*)p->context->ebp+2, pc);
       for(i=0; i<10 && pc[i] != 0; i++)
@@ -584,7 +581,7 @@ procdump(void)
     for (int i = 0; i < NTHREAD; ++i) {
       struct thread* th = p->thread + i;
       state = states[th->state];
-      if (th->state != UNUSED) cprintf("- %d %d %s %d %d %d\n", i, th->tid, state, th->kstack, th->tf, th->context);
+      if (th->state != UNUSED) cprintf("- %d %d %s %p %p %p\n", i, th->tid, state, th->kstack, th->tf, th->context);
     }
   }
 }
@@ -689,6 +686,7 @@ int allocth(struct proc* p) {
     if (th->state == UNUSED) {
       th->proc = p;
       th->tid = nexttid++;
+      th->state = EMBRYO;
       return i;
     }
   }
@@ -706,73 +704,80 @@ int allthzombie(struct proc* p) {
 }
 
 int thread_create(thread_t* thread, void*(*start_routine)(void*), void* arg) {
-  struct proc* curproc = myproc();
-  struct thread* th;
   char* sp;
-  int thidx = allocth(curproc);
-  th = curproc->thread + thidx;
+  struct proc *curproc = myproc();
+  int thidx;         // new thread index
+  struct thread* nt; // new thread pointer
+  uint sz, ustack[3+MAXARG+1];
 
+// allocproc
 
-  // Allocate kernel stack.
-  if((th->kstack = kalloc()) == 0){
-    th->state = UNUSED;
-    th->proc = 0;
-    th->tid = 0;
+  acquire(&ptable.lock);
+
+  // Allocate thread.
+  if ((thidx = allocth(curproc)) == -1) {
     return -1;
   }
-  sp = th->kstack + KSTACKSIZE;
+  nt = curproc->thread + thidx;
+
+  // Allocate kernel stack.
+  if((nt->kstack = kalloc()) == 0){
+    nt->state = UNUSED;
+    return -1;
+  }
+  sp = nt->kstack + KSTACKSIZE;
 
   // Leave room for trap frame.
-  sp -= sizeof *th->tf;
-  th->tf = (struct trapframe*)sp;
-  memset(th->tf, 0, sizeof(*th->tf));
+  sp -= sizeof *nt->tf;
+  nt->tf = (struct trapframe*)sp;
+  *nt->tf = *curproc->tf;
 
-  // // Set up new context to start executing at forkret,
-  // // which returns to trapret.
-  // sp -= 4;
+  // Clear %eax so that fork returns 0 in the child.
+  nt->tf->eax = 0; // not necessary
 
-  // // ??
-  // *(uint*)sp = (uint)trapret;
+  // Set up new context to start executing at forkret,
+  // which returns to trapret.
+  sp -= 4;
+  *(uint*)sp = (uint)trapret;
 
-  sp -= sizeof *th->context;
-  th->context = (struct context*)sp;
-  memset(th->context, 0, sizeof *th->context);
-  th->context->eip = (uint)start_routine;
+  sp -= sizeof *nt->context;
+  nt->context = (struct context*)sp;
+  memset(nt->context, 0, sizeof *nt->context);
+  nt->context->eip = (uint)forkret;
 
-
-  uint sz, usp, ustack[3+MAXARG+1];
+// exec
 
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible.  Use the second as the user stack.
   sz = PGROUNDUP(curproc->sz);
-  if ((sz = allocuvm(curproc->pgdir, sz, sz + (1 + curproc->stacksize) * PGSIZE)) == 0)
+  if((sz = allocuvm(curproc->pgdir, sz, sz + (1 + curproc->stacksize) * PGSIZE)) == 0)
     goto bad;
   clearpteu(curproc->pgdir, (char*)(sz - (1 + curproc->stacksize) * PGSIZE));
-  usp = sz;
-
-  // Push argument strings, prepare rest of stack in ustack.
+  sp = (char*) sz;
 
   ustack[0] = 0xffffffff;  // fake return PC
-  ustack[1] = (uint) arg;
+  ustack[1] = (uint)arg;
 
-  usp -= 2 * 4;
-  if(copyout(curproc->pgdir, usp, ustack, 2 * 4) < 0)
+  sp -= 2 * 4;
+  if(copyout(curproc->pgdir, (uint)sp, ustack, 2*4) < 0)
     goto bad;
 
-  // Commit to the user image.
   curproc->sz = sz;
-  th->tf->eip = (uint)start_routine;  // main
-  th->tf->esp = usp;
-
-  *thread = curproc->thread[thidx].tid;
-  th->state = RUNNABLE;
-  cprintf("%s %d\n", __func__, __LINE__);
-  procdump();
+  switchuvm(curproc); // not necessary
+  nt->tf->eip = (uint)start_routine;
+  nt->tf->esp = (uint)sp;
+  nt->state = RUNNABLE;
+  release(&ptable.lock);
+  *thread = nt->tid;
+  PRINTFL();
   return 0;
-  
-  bad:
-    return -1;
+
+ bad:
+  if(curproc->pgdir)
+    freevm(curproc->pgdir);
+  return -1;
 }
+
 // void thread_exit(void* retval) {
 
 // }
