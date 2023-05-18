@@ -27,6 +27,8 @@ int exec2(char*, char**, int);
 int setmemorylimit(int, int);
 int printProcList(void);
 int thread_create(thread_t*, void*(void*), void*);
+int thread_exit(void*);
+int thread_join(thread_t, void**);
 
 // ulib.c
 int stat(const char*, struct stat*);

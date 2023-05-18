@@ -268,23 +268,18 @@ exit(void)
 
   acquire(&ptable.lock);
 
-  curproc->thread[curproc->thidx].state = ZOMBIE;
-  int shouldexit = allthzombie(curproc);
-  
-  if (shouldexit) {
-    // Parent might be sleeping in wait().
-    wakeup1(curproc->parent);
+  // Parent might be sleeping in wait().
+  wakeup1(curproc->parent);
 
-    // Pass abandoned children to init.
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->parent == curproc){
-        p->parent = initproc;
-        if(p->state == ZOMBIE)
-          wakeup1(initproc);
-      }
+  // Pass abandoned children to init.
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->parent == curproc){
+      p->parent = initproc;
+      if(p->state == ZOMBIE)
+        wakeup1(initproc);
     }
-    curproc->state = ZOMBIE;
   }
+  curproc->state = ZOMBIE;
 
   // Jump into the scheduler, never to return if shouldexit is true.
   sched();
@@ -502,16 +497,17 @@ wakeup1(void *chan)
   struct proc *p;
   struct thread* th;
 
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    if (p->state != RUNNABLE && p->state != RUNNING) continue;
     for (int i = 0; i < NTHREAD; ++i) {
-      if (p->state != RUNNABLE) continue;
       th = p->thread + i;
       if(th->state == SLEEPING && th->chan == chan)
         th->state = RUNNABLE;
     }
+  }
 }
 
-// Wake up all processes sleeping on chan.
+// Wake up all threads sleeping on chan.
 void
 wakeup(void *chan)
 {
@@ -693,14 +689,16 @@ int allocth(struct proc* p) {
   return -1;
 }
 
-int allthzombie(struct proc* p) {
+
+int countth(struct proc* p) {
+  int count = 0;
   for (int i = 0; i < NTHREAD; ++i) {
     struct thread* th = p->thread + i;
     if (th->state != UNUSED && th->state != ZOMBIE) {
-      return 0;
+      ++count;
     }
   }
-  return 1;
+  return count;
 }
 
 int thread_create(thread_t* thread, void*(*start_routine)(void*), void* arg) {
@@ -769,7 +767,6 @@ int thread_create(thread_t* thread, void*(*start_routine)(void*), void* arg) {
   nt->state = RUNNABLE;
   release(&ptable.lock);
   *thread = nt->tid;
-  PRINTFL();
   return 0;
 
  bad:
@@ -778,9 +775,75 @@ int thread_create(thread_t* thread, void*(*start_routine)(void*), void* arg) {
   return -1;
 }
 
-// void thread_exit(void* retval) {
+void thread_exit(void* retval) {
+  struct proc *curproc = myproc();
+  struct thread* curth = curproc->thread + curproc->thidx;
+  acquire(&ptable.lock);
 
-// }
-// int thread_join(thread_t thread, void** retval) {
+  curth->state = ZOMBIE;
 
-// }
+
+  if (countth(curproc) == 0) {
+    cprintf("[WARN] trying to thread_exit the only thread -> Process killed\n");
+    curproc->killed = 1;
+    curproc->state = RUNNABLE;
+    curth->state = RUNNABLE;
+  }
+
+  curth->retval = retval;
+  curproc->retval = retval;
+  wakeup1(curth);
+
+  // Jump into the scheduler, never to return
+  curproc->state = RUNNABLE;
+  sched();
+  if (curth->state == ZOMBIE) panic("zombie exit");
+}
+
+int thread_join(thread_t thread, void** retval) {
+  struct thread* th;
+  int hasth = 0;
+  struct proc *curproc = myproc();
+  
+  acquire(&ptable.lock);
+  for (int i = 0; i < NTHREAD; ++i) {
+    th = curproc->thread + i;
+    if(th->tid == thread && th->state != UNUSED) {
+      // Found tid.
+      hasth = 1;
+      break;
+    }
+  }
+  if (hasth == 0) {
+    goto bad;
+  }
+  for (;;) {
+    if (th->state == ZOMBIE) {
+      th->tid = 0;
+      kfree(th->kstack);
+      th->kstack = 0;
+      th->state = UNUSED;
+      th->tf = 0;
+      th->context = 0;
+      th->chan = 0;
+      th->proc = 0;
+      
+      *retval = th->retval;
+      th->retval = 0;
+      release(&ptable.lock);
+      return 0;
+    }
+    if (curproc->killed) {
+      goto bad;
+    }
+    // Wait for thread to exit.  (See wakeup1 call in thread_exit.)
+    sleep(th, &ptable.lock);  //DOC: wait-sleep
+  }
+
+bad: 
+  // No point waiting if we don't have any thread with tid.
+  if (!hasth || curproc->killed){
+    release(&ptable.lock);
+  }
+  return -1;
+}

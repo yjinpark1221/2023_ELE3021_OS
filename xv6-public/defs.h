@@ -131,10 +131,10 @@ int             copythproc(struct proc*, int);
 int             existrunnable(struct proc*);
 int             copyprocth(struct proc*, int);
 int             allocth(struct proc*);
-int             allthzombie(struct proc*);
+int             countth(struct proc*);
 int             thread_create(thread_t*, void*(void*), void*);
-// void            thread_exit(void*);
-// int             thread_join(thread_t, void**);
+void            thread_exit(void*);
+int             thread_join(thread_t, void**);
 
 // swtch.S
 void            swtch(struct context**, struct context*);

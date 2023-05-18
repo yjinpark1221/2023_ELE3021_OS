@@ -6,18 +6,17 @@
 int c = 10;
 
 void* thread_func(void* arg) {
-  printf(1, "thread_func %p\n", thread_func);
   int thread_id = *(int*)arg;
   
-  printf(1, "Thread %d is running\n", thread_id);
+  // printf(1, "Thread %d is running\n", thread_id);
   c -= 1;
-  printf(1, "sleep %d\n", c);
-  sleep(10000);
-  exit();
+  sleep(100);
+  
+  thread_exit((void*) (thread_id * 10));
+  return 0;
 }
 
 int main() {
-  printf(1, "main %p\n", main);
   int i;
   int thread_args[NTHREADS];
   thread_t threads[NTHREADS];
@@ -26,27 +25,28 @@ int main() {
     thread_args[i] = i;
     printf(1, "for문 : %d\n", thread_args);
     int res = thread_create((uint*)&threads[i], thread_func, (void*)&thread_args[i]);
-    printf(1, " create res %d\n", res);
-    for (int i = 0; i < 100000; ++i);
+
     if (res != 0) {
       printf(1, "Failed to create thread\n");
       exit();
     }
-    printf(1,"test print main\n");
-    printf(1,"sleep main\n");
-    sleep(100);
-    printf(1,"wakeup main\n");
+    // sleep(100);
   }
+  // sleep(100);
   // // Wait for threads to finish
   for (i = 0; i < NTHREADS; i++) {
-    sleep(100);
-    // if (thread_join(i, 0) != 0) {
-    //   printf(1, "Failed to join thread\n");
-    //   exit();
-    // }
+    // sleep(100);
+    void* a;
+    int res = thread_join(threads[i], &a);
+    printf(1, "join %d retval %d\n", threads[i], (int)a);
+    if (res != 0) {
+      printf(1, "Failed to join thread\n");
+      exit();
+    }
+    if ((int) a != 10 * i) exit();
   }
 
-
+  printf(1, "yj test passed\n");
   exit();
 }
 

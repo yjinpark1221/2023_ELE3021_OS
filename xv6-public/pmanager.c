@@ -79,12 +79,15 @@ main(int argc, char *argv[])
 
       char* argv[] = { path, 0 };
       if (pid == 0) {
+        pid = fork();
+        if (pid) exit();
         if (exec2(path, argv, stacksize)) {
           printf(1, "execute failure\n");
           exit();
         }
         exit();
       }
+      else wait();
     }
     else if (curIns == MEMLIM) {
       int pid, limit;

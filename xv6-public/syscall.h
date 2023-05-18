@@ -24,3 +24,5 @@
 #define SYS_setmemorylimit  23
 #define SYS_printProcList 24
 #define SYS_thread_create 25
+#define SYS_thread_exit 26
+#define SYS_thread_join 27

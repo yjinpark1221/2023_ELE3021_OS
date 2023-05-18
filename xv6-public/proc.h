@@ -42,6 +42,7 @@ struct thread {
   struct context *context;     // swtch() here to run process       -> each thread
   void *chan;                  // If non-zero, sleeping on chan     -> each thread
   struct proc* proc;           // For debugging (not essential)
+  void* retval;                // thread return value
 };
 
 // Per-process state
@@ -65,6 +66,7 @@ struct proc {
   struct trapframe *tf;        // Trap frame for current syscall    -> each thread
   struct context *context;     // swtch() here to run process       -> each thread
   void *chan;                  // If non-zero, sleeping on chan     -> each thread
+  void* retval;                // thread return value
 };
 
 // Process memory is laid out contiguously, low addresses first:
