@@ -41,8 +41,8 @@ struct thread {
   struct trapframe *tf;        // Trap frame for current syscall    -> each thread
   struct context *context;     // swtch() here to run process       -> each thread
   void *chan;                  // If non-zero, sleeping on chan     -> each thread
-  struct proc* proc;           // For debugging (not essential)
   void* retval;                // thread return value
+  char* ustack;                // ustack bottom
 };
 
 // Per-process state
@@ -57,6 +57,7 @@ struct proc {
   char name[16];               // Process name (debugging)
   uint stacksize;              // stack size (pages)
   uint limit;                  // memory limit (bytes)
+  char* freedustack[NTHREAD];  // freed ustack top for each thread index
 
   struct thread thread[NTHREAD]; // thread array
   int thidx;                   // index of thread that ran recently
@@ -67,6 +68,7 @@ struct proc {
   struct context *context;     // swtch() here to run process       -> each thread
   void *chan;                  // If non-zero, sleeping on chan     -> each thread
   void* retval;                // thread return value
+  char* ustack;                // ustack bottom
 };
 
 // Process memory is laid out contiguously, low addresses first:

@@ -18,6 +18,20 @@ exec(char *path, char **argv)
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
+  char* pustack;
+
+  for (int i = 0; i < NTHREAD; ++i) {
+    if (i == curproc->thidx) continue;
+    curproc->freedustack[i] = 0;
+    struct thread* th = curproc->thread + i;
+    th->tid = 0;
+    th->state = UNUSED;
+    th->tf = 0;
+    th->context = 0;
+    th->chan = 0;
+    th->retval = 0;
+    th->ustack = 0;
+  }
 
   begin_op();
 
@@ -67,6 +81,7 @@ exec(char *path, char **argv)
     goto bad;
   clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
   sp = sz;
+  pustack = (char*)sp;
 
   // Push argument strings, prepare rest of stack in ustack.
   for(argc = 0; argv[argc]; argc++) {
@@ -100,6 +115,8 @@ exec(char *path, char **argv)
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
   curproc->stacksize = 1;
+  curproc->ustack = pustack;
+  curproc->thread[curproc->thidx].state = RUNNING;
   switchuvm(curproc);
   freevm(oldpgdir);
   return 0;
@@ -134,6 +151,20 @@ exec2(char *path, char **argv, int stacksize)
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
+  char* pustack;
+
+  for (int i = 0; i < NTHREAD; ++i) {
+    if (i == curproc->thidx) continue;
+    curproc->freedustack[i] = 0;
+    struct thread* th = curproc->thread + i;
+    th->tid = 0;
+    th->state = UNUSED;
+    th->tf = 0;
+    th->context = 0;
+    th->chan = 0;
+    th->retval = 0;
+    th->ustack = 0;
+  }
 
   begin_op();
 
@@ -183,6 +214,7 @@ exec2(char *path, char **argv, int stacksize)
     goto bad;
   clearpteu(pgdir, (char*)(sz - (1 + stacksize) * PGSIZE));
   sp = sz;
+  pustack = (char*)sp;
 
   // Push argument strings, prepare rest of stack in ustack.
   for(argc = 0; argv[argc]; argc++) {
@@ -216,6 +248,8 @@ exec2(char *path, char **argv, int stacksize)
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
   curproc->stacksize = stacksize;
+  curproc->ustack = pustack;
+  curproc->thread[curproc->thidx].state = RUNNING;
   switchuvm(curproc);
   freevm(oldpgdir);
   return 0;

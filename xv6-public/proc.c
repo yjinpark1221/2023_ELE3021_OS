@@ -227,6 +227,15 @@ fork(void)
   np->limit = curproc->limit;
   np->stacksize = curproc->stacksize;
 
+  for (int i = 0; i < NTHREAD; ++i) {
+    np->freedustack[i] = curproc->freedustack[i];
+    if (curproc->freedustack[i] == 0) {
+      np->freedustack[i] = curproc->thread[i].ustack;
+    }
+  }
+  np->freedustack[np->thidx] = 0;
+  np->thread[np->thidx].ustack = curproc->thread[curproc->thidx].ustack;
+
   pid = np->pid;
 
   acquire(&ptable.lock);
@@ -314,18 +323,25 @@ wait(void)
         p->killed = 0;
         p->state = UNUSED;
         p->limit = 0;
+        p->ustack = 0;
+
         for (int i = 0; i < NTHREAD; ++i) {
           struct thread* th = p->thread + i;
-          if (th->state == UNUSED) continue;
+          p->freedustack[i] = 0;
+
+          if (th->state == UNUSED)
+            continue;
+
           th->tid = 0;
-          kfree(th->kstack);
+          if (th->kstack)
+            kfree(th->kstack);
           th->kstack = 0;
           th->state = UNUSED;
           th->tf = 0;
           th->context = 0;
           th->chan = 0;
-          th->proc = 0;
         }
+
         release(&ptable.lock);
         return pid;
       }
@@ -567,7 +583,7 @@ procdump(void)
       state = states[p->state];
     else
       state = "???";
-    cprintf("%d %s %s %p %p %p", p->pid, state, p->name, p->kstack, p->tf, p->context);
+    cprintf("%d[%d] %s %s %p %p %p", p->pid, p->thidx, state, p->name, p->kstack, p->tf, p->context);
     if(p->state == SLEEPING){
       getcallerpcs((uint*)p->context->ebp+2, pc);
       for(i=0; i<10 && pc[i] != 0; i++)
@@ -577,7 +593,8 @@ procdump(void)
     for (int i = 0; i < NTHREAD; ++i) {
       struct thread* th = p->thread + i;
       state = states[th->state];
-      if (th->state != UNUSED) cprintf("- %d %d %s %p %p %p\n", i, th->tid, state, th->kstack, th->tf, th->context);
+      if (th->state != UNUSED) 
+        cprintf("- [%d] %d %s %p %p %p\n", i, th->tid, state, th->kstack, th->tf, th->context);
     }
   }
 }
@@ -640,18 +657,20 @@ int printProcList() {
   return 0;
 }
 
+// returns a thread index to run 
+// implementation of RR scheduler of thread
 int thidxtorun(struct proc* p) {
   int previdx = p->thidx;
   for (int i = NEXTTH(previdx); i != previdx; i = NEXTTH(i)) {
     struct thread* th = p->thread + i;
     if (th->state == RUNNABLE) return i;
   }
-  return 0;
+  return previdx;
 }
 
+// copies from thread to process (except ustack and state)
 int copythproc(struct proc* p, int thidx) {
   struct thread* th = p->thread + thidx;
-  if (th->proc != p) panic("thread proc inconsistent");
   p->kstack = th->kstack;
   p->tf = th->tf;
   p->context = th->context;
@@ -660,6 +679,7 @@ int copythproc(struct proc* p, int thidx) {
   return 0;
 }
 
+// returns if there is a RUNNABLE thread in a process
 int existrunnable(struct proc* p) {
   for (int i = 0; i < NTHREAD; ++i) {
     if (p->thread[i].state == RUNNABLE) return 1;
@@ -667,6 +687,7 @@ int existrunnable(struct proc* p) {
   return 0;
 }
 
+// copies from proc to thread (except ustack and state)
 int copyprocth(struct proc* p, int thidx) {
   struct thread* th = p->thread + thidx;
   th->kstack = p->kstack;
@@ -676,11 +697,11 @@ int copyprocth(struct proc* p, int thidx) {
   return 0;
 }
 
+// allocates thread in process and returns the index
 int allocth(struct proc* p) {
   for (int i = 0; i < NTHREAD; ++i) {
     struct thread* th = p->thread + i;
     if (th->state == UNUSED) {
-      th->proc = p;
       th->tid = nexttid++;
       th->state = EMBRYO;
       return i;
@@ -689,7 +710,7 @@ int allocth(struct proc* p) {
   return -1;
 }
 
-
+// returns the number of threads of process that are EMBRYO, RUNNABLE, RUNNING, or SLEEPING
 int countth(struct proc* p) {
   int count = 0;
   for (int i = 0; i < NTHREAD; ++i) {
@@ -701,15 +722,21 @@ int countth(struct proc* p) {
   return count;
 }
 
+// saves ustack bottom of current thread in p->freeustack
+void freeustack(struct proc* p, int thidx) {
+  p->freedustack[thidx] = p->thread[thidx].ustack;
+  p->thread[thidx].ustack = 0;
+}
+
+// creates thread
 int thread_create(thread_t* thread, void*(*start_routine)(void*), void* arg) {
-  char* sp;
+  char* sp, *pustack;
   struct proc *curproc = myproc();
   int thidx;         // new thread index
   struct thread* nt; // new thread pointer
   uint sz, ustack[3+MAXARG+1];
 
 // allocproc
-
   acquire(&ptable.lock);
 
   // Allocate thread.
@@ -748,10 +775,23 @@ int thread_create(thread_t* thread, void*(*start_routine)(void*), void* arg) {
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible.  Use the second as the user stack.
   sz = PGROUNDUP(curproc->sz);
-  if((sz = allocuvm(curproc->pgdir, sz, sz + (1 + curproc->stacksize) * PGSIZE)) == 0)
-    goto bad;
-  clearpteu(curproc->pgdir, (char*)(sz - (1 + curproc->stacksize) * PGSIZE));
-  sp = (char*) sz;
+
+  // reallocate freed ustack bottom
+  if (curproc->freedustack[thidx]) {
+    sp = curproc->freedustack[thidx];
+    curproc->freedustack[thidx] = 0;
+    sz = sz + (1 + curproc->stacksize) * PGSIZE;
+    pustack = sp;
+  }
+  // first use of this index
+  // allocate new user stack pages
+  else {
+    if((sz = allocuvm(curproc->pgdir, sz, sz + (1 + curproc->stacksize) * PGSIZE)) == 0)
+      goto bad;
+    clearpteu(curproc->pgdir, (char*)(sz - (1 + curproc->stacksize) * PGSIZE));
+    sp = (char*)sz;
+    pustack = (char*)sz;
+  }
 
   ustack[0] = 0xffffffff;  // fake return PC
   ustack[1] = (uint)arg;
@@ -761,6 +801,7 @@ int thread_create(thread_t* thread, void*(*start_routine)(void*), void* arg) {
     goto bad;
 
   curproc->sz = sz;
+  nt->ustack = pustack;
   switchuvm(curproc); // not necessary
   nt->tf->eip = (uint)start_routine;
   nt->tf->esp = (uint)sp;
@@ -802,32 +843,33 @@ void thread_exit(void* retval) {
 
 int thread_join(thread_t thread, void** retval) {
   struct thread* th;
-  int hasth = 0;
   struct proc *curproc = myproc();
-  
+  int thidx = -1;
+
   acquire(&ptable.lock);
   for (int i = 0; i < NTHREAD; ++i) {
     th = curproc->thread + i;
     if(th->tid == thread && th->state != UNUSED) {
       // Found tid.
-      hasth = 1;
+      thidx = i;
       break;
     }
   }
-  if (hasth == 0) {
+  if (thidx == -1) {
     goto bad;
   }
   for (;;) {
     if (th->state == ZOMBIE) {
       th->tid = 0;
-      kfree(th->kstack);
+      if (th->kstack)
+        kfree(th->kstack);
       th->kstack = 0;
       th->state = UNUSED;
       th->tf = 0;
       th->context = 0;
       th->chan = 0;
-      th->proc = 0;
-      
+      freeustack(curproc, thidx);
+
       *retval = th->retval;
       th->retval = 0;
       release(&ptable.lock);
@@ -842,7 +884,7 @@ int thread_join(thread_t thread, void** retval) {
 
 bad: 
   // No point waiting if we don't have any thread with tid.
-  if (!hasth || curproc->killed){
+  if (thidx == -1 || curproc->killed) {
     release(&ptable.lock);
   }
   return -1;
