@@ -94,3 +94,10 @@ kalloc(void)
   return (char*)r;
 }
 
+int frees() {
+  int cnt = 0;
+  for (struct run* r = kmem.freelist; r; r = r->next) {
+    cnt++;
+  }
+  return cnt;
+}

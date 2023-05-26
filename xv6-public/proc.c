@@ -19,6 +19,7 @@ int nextpid = 1;
 int nexttid = 1;
 extern void forkret(void);
 extern void trapret(void);
+extern int frees(void);
 
 static void wakeup1(void *chan);
 
@@ -644,6 +645,7 @@ void printProc(struct proc* p) {
 
 int printProcList() {
   struct proc* p;
+  cprintf("total free pages: %d\n", frees());
   acquire(&ptable.lock);
   cprintf("[pid]\t[state]\t[runth]\t[stack]\t[size]\t[limit]\t[name]\n");
   cprintf("--------------------------------------------------\n");
@@ -780,7 +782,6 @@ int thread_create(thread_t* thread, void*(*start_routine)(void*), void* arg) {
   if (curproc->freedustack[thidx]) {
     sp = curproc->freedustack[thidx];
     curproc->freedustack[thidx] = 0;
-    sz = sz + (1 + curproc->stacksize) * PGSIZE;
     pustack = sp;
   }
   // first use of this index
