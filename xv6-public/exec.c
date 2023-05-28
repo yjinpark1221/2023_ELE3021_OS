@@ -25,6 +25,9 @@ exec(char *path, char **argv)
     curproc->freedustack[i] = 0;
     struct thread* th = curproc->thread + i;
     th->tid = 0;
+    if (th->kstack)
+      kfree(th->kstack);
+    th->kstack = 0;
     th->state = UNUSED;
     th->tf = 0;
     th->context = 0;
@@ -158,6 +161,9 @@ exec2(char *path, char **argv, int stacksize)
     curproc->freedustack[i] = 0;
     struct thread* th = curproc->thread + i;
     th->tid = 0;
+    if (th->kstack)
+      kfree(th->kstack);
+    th->kstack = 0;
     th->state = UNUSED;
     th->tf = 0;
     th->context = 0;

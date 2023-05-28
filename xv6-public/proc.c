@@ -92,7 +92,6 @@ allocproc(void)
 
 found:
   p->state = EMBRYO;
-  p->thread[thidx].state = EMBRYO;
   p->pid = nextpid++;
   p->limit = 0;
   release(&ptable.lock);
@@ -633,21 +632,21 @@ int setmemorylimit(int pid, int limit) {
 
 void printProc(struct proc* p) {
   static char *states[] = {
-  [UNUSED]    "unused",
-  [EMBRYO]    "embryo",
-  [SLEEPING]  "sleep ",
-  [RUNNABLE]  "runble",
-  [RUNNING]   "run   ",
-  [ZOMBIE]    "zombie"
+  [UNUSED]    "UNUSED  ",
+  [EMBRYO]    "EMBRYO  ",
+  [SLEEPING]  "SLEEPING",
+  [RUNNABLE]  "RUNNABLE",
+  [RUNNING]   "RUNNING ",
+  [ZOMBIE]    "ZOMBIE  "
   };
-  cprintf("[ %d ]\t%s\t%d\t%d\t%d\t%d\t%s\n", p->pid, (p->state < 6 && p->state >= 0) ? states[p->state] : "???", existrunnable(p), p->stacksize, p->sz, p->limit, p->name);
+  cprintf("[ %d ]\t%s\t%d\t%d\t%d\t%d\t%s\n", p->pid, (p->state < 6 && p->state >= 0) ? states[p->state] : "???     ", countth(p), p->stacksize, p->sz, p->limit, p->name);
 }
 
 int printProcList() {
   struct proc* p;
   cprintf("total free pages: %d\n", frees());
   acquire(&ptable.lock);
-  cprintf("[pid]\t[state]\t[runth]\t[stack]\t[size]\t[limit]\t[name]\n");
+  cprintf("[pid]\t [state] \t[runth]\t[stack]\t[size]\t[limit]\t[name]\n");
   cprintf("--------------------------------------------------\n");
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if (p->state != UNUSED) {
