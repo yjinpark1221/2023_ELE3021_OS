@@ -6,6 +6,10 @@
         "user.h": "c",
         "stat.h": "c",
         "types.h": "c",
-        "param.h": "c"
+        "param.h": "c",
+        "defs.h": "c",
+        "fs.h": "c",
+        "mmu.h": "c",
+        "traps.h": "c"
     }
 }
