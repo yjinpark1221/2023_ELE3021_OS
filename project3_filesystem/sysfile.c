@@ -292,9 +292,7 @@ create(char *path, short type, short major, short minor)
   if((dp = nameiparent(path, name)) == 0)
     return 0;
   ilock(dp);
-  cprintf("create dp size %d\n", dp->size);
   if((ip = dirlookup(dp, name, 0)) != 0){
-  cprintf("create ip size %d\n", ip->size);
     iunlockput(dp);
     ilock(ip);
     if(type == T_FILE && ip->type == T_FILE)
@@ -327,7 +325,6 @@ create(char *path, short type, short major, short minor)
     panic("create: dirlink");
 
   iunlockput(dp);
-  cprintf("create ip size %d\n", ip->size);
 
   return ip;
 }

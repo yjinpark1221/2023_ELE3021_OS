@@ -16,7 +16,7 @@
 //
 // A system call should call begin_op()/end_op() to mark
 // its start and end. Usually begin_op() just increments
-// the count of in-progress FS system calls and returns.
+// the count of in-progress FS system calls and returns.  
 // But if it thinks the log is close to running out, it
 // sleeps until the last outstanding end_op() commits.
 //
@@ -49,6 +49,7 @@ struct log log;
 
 static void recover_from_log(void);
 static void commit();
+static void write_log(void);
 
 void
 initlog(int dev)
@@ -140,21 +141,30 @@ begin_op(void)
   }
 }
 
+// conditionally commit
+// if not doing commit, write log
 // called at the end of each FS system call.
 // commits if this was the last outstanding operation.
 void
 end_op(void)
 {
   int do_commit = 0;
+  int do_log = 0;
 
   acquire(&log.lock);
   log.outstanding -= 1;
   if(log.committing)
     panic("log.committing");
   if(log.outstanding == 0){
-    do_commit = 1;
     log.committing = 1;
-  } else {
+    if (log.lh.n + MAXOPBLOCKS <= LOGSIZE) {
+      do_log = 1;
+    }
+    else {
+      do_commit = 1;
+    }
+  }
+  else {
     // begin_op() may be waiting for log space,
     // and decrementing log.outstanding has decreased
     // the amount of reserved space.
@@ -162,22 +172,23 @@ end_op(void)
   }
   release(&log.lock);
 
-  if(do_commit){
-    // call commit w/o holding locks, since not allowed
-    // to sleep with locks.
-    commit();
-    acquire(&log.lock);
+  if (do_log) {
+    write_log();
     log.committing = 0;
     wakeup(&log);
-    release(&log.lock);
+  }
+  if (do_commit) {
+    sync1(0);
   }
 }
 
+// TODO : add prevn in log
 // Copy modified blocks from cache to log.
 static void
 write_log(void)
 {
   int tail;
+  // cprintf("write log start\n");
 
   for (tail = 0; tail < log.lh.n; tail++) {
     struct buf *to = bread(log.dev, log.start+tail+1); // log block
@@ -187,8 +198,10 @@ write_log(void)
     brelse(from);
     brelse(to);
   }
+  // cprintf("write log done\n");
 }
 
+// log.committing should be 1
 static void
 commit()
 {
@@ -199,6 +212,56 @@ commit()
     log.lh.n = 0;
     write_head();    // Erase the transaction from the log
   }
+}
+
+int sync1(int is_syscall) {
+  int n;
+  cprintf("sync1\n");
+
+  if (holding(&log.lock)) {
+    cprintf("holding log lock in sync1\n");
+  }
+  acquire(&log.lock);
+
+  if (!is_syscall)
+    goto check;
+
+  if(log.committing) {
+    sleep(&log, &log.lock);
+    release(&log.lock);
+
+    n = log.lh.n; // should be 0
+    if (n) {
+      panic("sync1 committing");
+    }
+    return n;
+  }
+
+  for (; log.outstanding;) {
+    cprintf("here\n");
+    sleep(&log, &log.lock);
+    cprintf("wakeup\n");
+  }
+
+check:
+  log.committing = 1;
+  n = log.lh.n;
+  release(&log.lock);
+
+  // call commit w/o holding locks, since not allowed
+  // to sleep with locks.
+  commit();
+  cprintf("commit done\n");
+  acquire(&log.lock);
+  log.committing = 0;
+  wakeup(&log);
+  release(&log.lock);
+  
+  return n;
+}
+
+int sys_sync(void) {
+  return sync1(1);
 }
 
 // Caller has modified b->data and is done with the buffer.
@@ -232,3 +295,10 @@ log_write(struct buf *b)
   release(&log.lock);
 }
 
+// FOR WIKI : bget -> sync1 무한재귀
+int get_log_size() {
+  if (log.committing) {
+    return -1;
+  }
+  return log.lh.n;
+}

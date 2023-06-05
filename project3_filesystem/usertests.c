@@ -198,7 +198,7 @@ writetest1(void)
   }
 
   for(i = 0; i < MAXFILE; i++){
-    if (i % 1000 == 0)
+    if (i % 100 == 0)
       printf(1, "%d / %d\n", i, MAXFILE);
     ((int*)buf)[0] = i;
     if(write(fd, buf, 512) != 512){

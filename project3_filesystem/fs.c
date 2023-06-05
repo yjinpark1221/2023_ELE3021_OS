@@ -457,6 +457,7 @@ void freeDouble(struct inode* ip, uint addr) {
   bfree(ip->dev, ip->D_addr);
 }
 
+// TODO : check sleep
 // Truncate inode (discard contents).
 // Only called when the inode has no links
 // to it (no directory entries referring to it)
