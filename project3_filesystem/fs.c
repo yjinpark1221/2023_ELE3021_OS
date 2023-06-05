@@ -586,25 +586,30 @@ writei(struct inode *ip, char *src, uint off, uint n)
 {
   uint tot, m;
   struct buf *bp;
+  struct inode* original = 0;
 
-  if(ip->type == T_DEV){
-    if(ip->major < 0 || ip->major >= NDEV || !devsw[ip->major].write)
-      return -1;
-    return devsw[ip->major].write(ip, src, n);
-  }
+  if (ip->type == T_SYM)
+    original = ip;
 
   for (; ip->type == T_SYM;) {
     char* path = (char*)&ip->addrs;
+    iunlock(ip);
     ip = namei(path);
-    if (ip == 0) {
-      return -1;
-    }
+    if (ip == 0) 
+      goto bad;
+    ilock(ip);
+  }
+
+  if(ip->type == T_DEV){
+    if(ip->major < 0 || ip->major >= NDEV || !devsw[ip->major].write)
+      goto bad;
+    return devsw[ip->major].write(ip, src, n);
   }
 
   if(off > ip->size || off + n < off)
-    return -1;
+    goto bad;
   if(off + n > MAXFILE*BSIZE)
-    return -1;
+    goto bad;
 
   for(tot=0; tot<n; tot+=m, off+=m, src+=m){
     bp = bread(ip->dev, bmap(ip, off/BSIZE));
@@ -618,9 +623,20 @@ writei(struct inode *ip, char *src, uint off, uint n)
     ip->size = off;
     iupdate(ip);
   }
+   if (original) {
+    iunlock(ip);
+    ilock(original);
+  }
   return n;
-}
 
+bad:
+  if (original) {
+    if (ip)
+      iunlock(ip);
+    ilock(original);
+  }
+  return -1;
+}
 //PAGEBREAK!
 // Directories
 

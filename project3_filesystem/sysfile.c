@@ -177,11 +177,9 @@ sys_symlink(void)
     return -1;
   }
   begin_op();
-  if((ip = namei(old)) == 0){
-    end_op();
-    return -1;
-  }
-
+  if((ip = namei(old)) == 0)
+    goto bad;
+  // TODO : check this part
   // ilock(ip);
   // if(ip->type == T_DIR){
   //   iunlockput(ip);
@@ -192,7 +190,8 @@ sys_symlink(void)
 
   // iupdate(ip);
   // iunlockput(ip);
-
+  if (namei(new))
+    goto bad;
   if((dp = create(new, T_SYM, 0, 0)) == 0)
     goto bad;
 
