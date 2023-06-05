@@ -188,7 +188,6 @@ static void
 write_log(void)
 {
   int tail;
-  // cprintf("write log start\n");
 
   for (tail = 0; tail < log.lh.n; tail++) {
     struct buf *to = bread(log.dev, log.start+tail+1); // log block
@@ -198,7 +197,6 @@ write_log(void)
     brelse(from);
     brelse(to);
   }
-  // cprintf("write log done\n");
 }
 
 // log.committing should be 1
@@ -218,8 +216,9 @@ int sync1(int is_syscall) {
   int n;
   cprintf("sync1\n");
 
+// FOR DEBUG: holding test
   if (holding(&log.lock)) {
-    cprintf("holding log lock in sync1\n");
+    panic("holding lock in sync1");   
   }
   acquire(&log.lock);
 
@@ -238,9 +237,7 @@ int sync1(int is_syscall) {
   }
 
   for (; log.outstanding;) {
-    cprintf("here\n");
     sleep(&log, &log.lock);
-    cprintf("wakeup\n");
   }
 
 check:

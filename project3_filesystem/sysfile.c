@@ -186,10 +186,9 @@ sys_symlink(void)
   //   end_op();
   //   return -1;
   // }
-  // cprintf("ip size before memmove %d\n", ip->size);
 
   // iupdate(ip);
-  // iunlockput(ip);
+  // iunlock(ip);
   if (namei(new))
     goto bad;
   if((dp = create(new, T_SYM, 0, 0)) == 0)
@@ -428,6 +427,21 @@ sys_chdir(void)
     return -1;
   }
   ilock(ip);
+
+  // struct inode* original = 0;
+
+  // if (ip->type == T_SYM)
+  //   original = ip;
+
+  for (; ip->type == T_SYM;) {
+    char* path = (char*)&ip->addrs;
+    iunlock(ip);
+    ip = namei(path);
+    if (ip == 0)
+      panic("sys_chdir ip null");
+    ilock(ip);
+  }
+
   if(ip->type != T_DIR){
     iunlockput(ip);
     end_op();
