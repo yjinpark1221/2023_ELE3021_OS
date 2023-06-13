@@ -55,7 +55,7 @@ binit(void)
   }
 }
 
-// TODO : change bget
+int f = 0;
 // Look through buffer cache for block on device dev.
 // If not found, allocate a buffer.
 // In either case, return locked buffer.
@@ -63,23 +63,37 @@ static struct buf*
 bget(uint dev, uint blockno)
 {
   struct buf *b;
-  // cprintf("bget\t");
 
-// FOR WIKI: acquire 여기서 했더니 panic bcache lock acquire 
-  if (get_log_size() >= LOGSIZE - MAXOPBLOCKS) {
-    if (sync1(0) == -1) {
-      // cprintf("bget release1\n");
-      return 0;
+  acquire(&bcache.lock);
+
+  // check if there is a usable buffer
+  // if there is no space, call sync
+  int cnt = 0;
+  for(b = bcache.head.prev; b != &bcache.head; b = b->prev){
+    if(b->refcnt == 0 && (b->flags & B_DIRTY) == 0) {
+      ++cnt;
     }
   }
 
-  acquire(&bcache.lock);
+  if (cnt <= 2 && f == 0) {
+    release(&bcache.lock);
+    ++f;
+    sync1(0);
+    f = 0;
+    int tmp = 0;
+    for(b = bcache.head.prev; b != &bcache.head; b = b->prev){
+      if(b->refcnt == 0 && (b->flags & B_DIRTY) == 0) {
+        ++tmp;
+      }
+    }
+
+    acquire(&bcache.lock);
+  }
 
   // Is the block already cached?
   for(b = bcache.head.next; b != &bcache.head; b = b->next){
     if(b->dev == dev && b->blockno == blockno){
       b->refcnt++;
-      // cprintf("bget release2\n");
       release(&bcache.lock);
       acquiresleep(&b->lock);
       return b;
@@ -95,7 +109,6 @@ bget(uint dev, uint blockno)
       b->blockno = blockno;
       b->flags = 0;
       b->refcnt = 1;
-      // cprintf("bget release3\n");
       release(&bcache.lock);
       acquiresleep(&b->lock);
       return b;
@@ -137,7 +150,6 @@ brelse(struct buf *b)
 
   releasesleep(&b->lock);
 
-  // cprintf("brelse acquire\t");
   acquire(&bcache.lock);
   b->refcnt--;
   if (b->refcnt == 0) {
@@ -149,7 +161,7 @@ brelse(struct buf *b)
     bcache.head.next->prev = b;
     bcache.head.next = b;
   }
-  // cprintf("brelse release\n");
+
   release(&bcache.lock);
 }
 //PAGEBREAK!

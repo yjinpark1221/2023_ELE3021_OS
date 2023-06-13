@@ -252,7 +252,6 @@ balloc(int used)
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
-// TODO : modify iappend
 void
 iappend(uint inum, void *xp, int n)
 {

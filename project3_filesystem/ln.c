@@ -19,5 +19,9 @@ main(int argc, char *argv[])
       printf(2, "link %s %s: failed\n", argv[1], argv[2]);
     }
   }
+  else {
+    printf(2, "Usage: ln [-h / -s] old new\n");
+    exit();
+  }
   exit();
 }

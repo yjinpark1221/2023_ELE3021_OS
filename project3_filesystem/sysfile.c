@@ -179,16 +179,7 @@ sys_symlink(void)
   begin_op();
   if((ip = namei(old)) == 0)
     goto bad;
-  // TODO : check this part
-  // ilock(ip);
-  // if(ip->type == T_DIR){
-  //   iunlockput(ip);
-  //   end_op();
-  //   return -1;
-  // }
 
-  // iupdate(ip);
-  // iunlock(ip);
   if (namei(new))
     goto bad;
   if((dp = create(new, T_SYM, 0, 0)) == 0)
@@ -294,9 +285,13 @@ create(char *path, short type, short major, short minor)
   if((ip = dirlookup(dp, name, 0)) != 0){
     iunlockput(dp);
     ilock(ip);
+
+    if (type == T_SYM)
+      return ip;
+
     if(type == T_FILE && ip->type == T_FILE)
       return ip;
-    if (type == T_SYM) return ip;
+
     iunlockput(ip);
     return 0;
   }
@@ -308,7 +303,6 @@ create(char *path, short type, short major, short minor)
   ip->major = major;
   ip->minor = minor;
   ip->nlink = 1;
-  if (type == T_SYM && ip->type != T_SYM) ip->type = T_SYM;
 
   iupdate(ip);
 

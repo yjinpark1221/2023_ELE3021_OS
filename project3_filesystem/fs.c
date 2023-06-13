@@ -371,6 +371,8 @@ iunlockput(struct inode *ip)
 // are listed in ip->addrs[].  The next NINDIRECT blocks are
 // listed in block ip->addrs[NDIRECT].
 
+// Return the address saved as 'idx'th element in 'addr'
+// if 'idx'th element is 0, allocate new disk block using 'balloc' function
 uint bmapstep(struct inode* ip, uint addr, uint idx) {
   uint* a;
   struct buf* bp;
@@ -438,6 +440,7 @@ bmap(struct inode *ip, uint bn)
   panic("bmap: out of range");
 }
 
+// frees two layers in itrunc function
 void freeDouble(struct inode* ip, uint addr) {
   struct buf* bp = bread(ip->dev, addr);
   uint *a = (uint*)bp->data;
@@ -457,7 +460,6 @@ void freeDouble(struct inode* ip, uint addr) {
   bfree(ip->dev, ip->D_addr);
 }
 
-// TODO : check sleep
 // Truncate inode (discard contents).
 // Only called when the inode has no links
 // to it (no directory entries referring to it)

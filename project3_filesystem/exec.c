@@ -6,12 +6,7 @@
 #include "defs.h"
 #include "x86.h"
 #include "elf.h"
-#include "defs.h"
-#include "stat.h"
-#include "fs.h"
-#include "spinlock.h"
-#include "sleeplock.h"
-#include "file.h"
+
 int
 exec(char *path, char **argv)
 {
@@ -31,13 +26,11 @@ exec(char *path, char **argv)
     cprintf("exec: fail\n");
     return -1;
   }
-
   ilock(ip);
   pgdir = 0;
 
   // Check ELF header
-  int t;
-  if((t = readi(ip, (char*)&elf, 0, sizeof(elf))) != sizeof(elf))
+  if(readi(ip, (char*)&elf, 0, sizeof(elf)) != sizeof(elf))
     goto bad;
   if(elf.magic != ELF_MAGIC)
     goto bad;

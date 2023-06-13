@@ -16,7 +16,7 @@
 //
 // A system call should call begin_op()/end_op() to mark
 // its start and end. Usually begin_op() just increments
-// the count of in-progress FS system calls and returns.  
+// the count of in-progress FS system calls and returns.
 // But if it thinks the log is close to running out, it
 // sleeps until the last outstanding end_op() commits.
 //
@@ -49,7 +49,6 @@ struct log log;
 
 static void recover_from_log(void);
 static void commit();
-static void write_log(void);
 
 void
 initlog(int dev)
@@ -130,9 +129,6 @@ begin_op(void)
   while(1){
     if(log.committing){
       sleep(&log, &log.lock);
-    } else if(log.lh.n + (log.outstanding+1)*MAXOPBLOCKS > LOGSIZE){
-      // this op might exhaust log space; wait for commit.
-      sleep(&log, &log.lock);
     } else {
       log.outstanding += 1;
       release(&log.lock);
@@ -141,48 +137,20 @@ begin_op(void)
   }
 }
 
-// conditionally commit
-// if not doing commit, write log
 // called at the end of each FS system call.
 // commits if this was the last outstanding operation.
 void
 end_op(void)
 {
-  int do_commit = 0;
-  int do_log = 0;
-
   acquire(&log.lock);
   log.outstanding -= 1;
-  if(log.committing)
-    panic("log.committing");
-  if(log.outstanding == 0){
-    log.committing = 1;
-    if (log.lh.n + MAXOPBLOCKS <= LOGSIZE) {
-      do_log = 1;
-    }
-    else {
-      do_commit = 1;
-    }
+  while(log.committing){
+    sleep(&log, &log.lock);
   }
-  else {
-    // begin_op() may be waiting for log space,
-    // and decrementing log.outstanding has decreased
-    // the amount of reserved space.
-    wakeup(&log);
-  }
+  wakeup(&log);
   release(&log.lock);
-
-  if (do_log) {
-    write_log();
-    log.committing = 0;
-    wakeup(&log);
-  }
-  if (do_commit) {
-    sync1(0);
-  }
 }
 
-// TODO : add prevn in log
 // Copy modified blocks from cache to log.
 static void
 write_log(void)
@@ -203,23 +171,20 @@ write_log(void)
 static void
 commit()
 {
+  if (log.committing == 0) 
+    panic("in commit, log.committing 0");
   if (log.lh.n > 0) {
-    write_log();     // Write modified blocks from cache to log
-    write_head();    // Write header to disk -- the real commit
-    install_trans(); // Now install writes to home locations
+    write_log();     // Write modified blocks from cache to log // 2개
+    write_head();    // Write header to disk -- the real commit // 1개
+    install_trans(); // Now install writes to home locations // 1개
     log.lh.n = 0;
-    write_head();    // Erase the transaction from the log
+    write_head();    // Erase the transaction from the log // 1개
   }
 }
 
 int sync1(int is_syscall) {
   int n;
   cprintf("sync1\n");
-
-// FOR DEBUG: holding test
-  if (holding(&log.lock)) {
-    panic("holding lock in sync1");   
-  }
   acquire(&log.lock);
 
   if (!is_syscall)
@@ -236,10 +201,6 @@ int sync1(int is_syscall) {
     return n;
   }
 
-  for (; log.outstanding;) {
-    sleep(&log, &log.lock);
-  }
-
 check:
   log.committing = 1;
   n = log.lh.n;
@@ -248,12 +209,11 @@ check:
   // call commit w/o holding locks, since not allowed
   // to sleep with locks.
   commit();
-  cprintf("commit done\n");
   acquire(&log.lock);
   log.committing = 0;
   wakeup(&log);
   release(&log.lock);
-  
+
   return n;
 }
 
@@ -277,8 +237,6 @@ log_write(struct buf *b)
 
   if (log.lh.n >= LOGSIZE || log.lh.n >= log.size - 1)
     panic("too big a transaction");
-  if (log.outstanding < 1)
-    panic("log_write outside of trans");
 
   acquire(&log.lock);
   for (i = 0; i < log.lh.n; i++) {
@@ -290,12 +248,4 @@ log_write(struct buf *b)
     log.lh.n++;
   b->flags |= B_DIRTY; // prevent eviction
   release(&log.lock);
-}
-
-// FOR WIKI : bget -> sync1 무한재귀
-int get_log_size() {
-  if (log.committing) {
-    return -1;
-  }
-  return log.lh.n;
 }

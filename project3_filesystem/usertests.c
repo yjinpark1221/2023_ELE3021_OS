@@ -1758,7 +1758,6 @@ main(int argc, char *argv[])
   }
   close(open("usertests.ran", O_CREATE));
 
-  writetest1();
   argptest();
   createdelete();
   linkunlink();
@@ -1798,6 +1797,7 @@ main(int argc, char *argv[])
   bigdir(); // slow
 
   uio();
+  writetest1();
 
   exectest();
 
