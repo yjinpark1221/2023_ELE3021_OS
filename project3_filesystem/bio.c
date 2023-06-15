@@ -55,7 +55,7 @@ binit(void)
   }
 }
 
-int f = 0;
+int synchronizing;
 // Look through buffer cache for block on device dev.
 // If not found, allocate a buffer.
 // In either case, return locked buffer.
@@ -75,17 +75,11 @@ bget(uint dev, uint blockno)
     }
   }
 
-  if (cnt <= 2 && f == 0) {
+  if (cnt <= NRESBUF && synchronizing == 0) {
     release(&bcache.lock);
-    ++f;
+    ++synchronizing;
     sync1(0);
-    f = 0;
-    int tmp = 0;
-    for(b = bcache.head.prev; b != &bcache.head; b = b->prev){
-      if(b->refcnt == 0 && (b->flags & B_DIRTY) == 0) {
-        ++tmp;
-      }
-    }
+    synchronizing = 0;
 
     acquire(&bcache.lock);
   }

@@ -49,6 +49,7 @@ struct log log;
 
 static void recover_from_log(void);
 static void commit();
+extern int synchronizing;
 
 void
 initlog(int dev)
@@ -63,6 +64,7 @@ initlog(int dev)
   log.size = sb.nlog;
   log.dev = dev;
   recover_from_log();
+  synchronizing=0;
 }
 
 // Copy committed blocks from log to their home location
@@ -184,7 +186,7 @@ commit()
 
 int sync1(int is_syscall) {
   int n;
-  cprintf("sync1\n");
+  cprintf("sync1 is_syscall(%d)\n", is_syscall);
   acquire(&log.lock);
 
   if (!is_syscall)
@@ -218,7 +220,10 @@ check:
 }
 
 int sys_sync(void) {
-  return sync1(1);
+  synchronizing = 1;
+  int res = sync1(1);
+  synchronizing = 0;
+  return res;
 }
 
 // Caller has modified b->data and is done with the buffer.

@@ -544,7 +544,7 @@ readi(struct inode *ip, char *dst, uint off, uint n)
   int depth = 0;
   for (; ip->type == T_SYM; ++depth) {
     if (depth > SYMDEPTH) {
-      cprintf("[ERROR] Maximum symbolic link depth is %d, pleas check possibility of cycle existance.\n", SYMDEPTH);
+      cprintf("[ERROR] Maximum symbolic link depth is %d, please check possibility of cycle existance.\n", SYMDEPTH);
       goto bad;
     }
     char* path = (char*)&ip->addrs;
@@ -605,7 +605,7 @@ writei(struct inode *ip, char *src, uint off, uint n)
   int depth = 0;
   for (; ip->type == T_SYM; ++depth) {
     if (depth > SYMDEPTH) {
-      cprintf("[ERROR] Maximum symbolic link depth is %d, pleas check possibility of cycle existance.\n", SYMDEPTH);
+      cprintf("[ERROR] Maximum symbolic link depth is %d, please check possibility of cycle existance.\n", SYMDEPTH);
       goto bad;
     }
     char* path = (char*)&ip->addrs;
