@@ -12,4 +12,3 @@
 #define NRESBUF     5  // size of disk block cache
 #define LOGSIZE  (MAXOPBLOCKS*5 + NRESBUF)  // max data blocks in on-disk log
 #define FSSIZE  1000000  // size of file system in blocks
-//#define FSSIZE  1000  // size of file system in blocks

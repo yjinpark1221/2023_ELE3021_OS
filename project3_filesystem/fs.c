@@ -22,6 +22,9 @@
 #include "file.h"
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
+
+#define SYMDEPTH 15
+
 static void itrunc(struct inode*);
 // there should be one superblock per disk device, but we run with
 // only one device
@@ -538,7 +541,12 @@ readi(struct inode *ip, char *dst, uint off, uint n)
   if (ip->type == T_SYM)
     original = ip;
 
-  for (; ip->type == T_SYM;) {
+  int depth = 0;
+  for (; ip->type == T_SYM; ++depth) {
+    if (depth > SYMDEPTH) {
+      cprintf("[ERROR] Maximum symbolic link depth is %d, pleas check possibility of cycle existance.\n", SYMDEPTH);
+      goto bad;
+    }
     char* path = (char*)&ip->addrs;
     iunlock(ip);
     ip = namei(path);
@@ -594,7 +602,12 @@ writei(struct inode *ip, char *src, uint off, uint n)
   if (ip->type == T_SYM)
     original = ip;
 
-  for (; ip->type == T_SYM;) {
+  int depth = 0;
+  for (; ip->type == T_SYM; ++depth) {
+    if (depth > SYMDEPTH) {
+      cprintf("[ERROR] Maximum symbolic link depth is %d, pleas check possibility of cycle existance.\n", SYMDEPTH);
+      goto bad;
+    }
     char* path = (char*)&ip->addrs;
     iunlock(ip);
     ip = namei(path);
