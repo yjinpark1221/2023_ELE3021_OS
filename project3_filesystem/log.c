@@ -186,7 +186,6 @@ commit()
 
 int sync1(int is_syscall) {
   int n;
-  cprintf("sync1 is_syscall(%d)\n", is_syscall);
   acquire(&log.lock);
 
   if (!is_syscall)
@@ -198,7 +197,7 @@ int sync1(int is_syscall) {
 
     n = log.lh.n; // should be 0
     if (n) {
-      panic("sync1 committing");
+      return -1;
     }
     return n;
   }
@@ -216,6 +215,9 @@ check:
   wakeup(&log);
   release(&log.lock);
 
+  if (log.lh.n) {
+    return -1;
+  }
   return n;
 }
 
